@@ -177,26 +177,38 @@ app.get("/api/test-db", async (req, res) => {
   if (!supabase) {
     return res.status(500).json({ 
       success: false, 
-      error: "Supabase client not initialized. Check your .env file." 
+      error: "Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_ANON_KEY environment variables." 
     });
   }
 
+  const tables = ['tracks', 'playlists', 'clients', 'share_links', 'activities', 'messages', 'promo_videos', 'profiles', 'promo_packs', 'todos'];
+  const results: any = {};
+  let overallSuccess = true;
+
   try {
-    const { data, error } = await supabase.from('tracks').select('id').limit(1);
-    
-    if (error) {
-      return res.status(400).json({ 
-        success: false, 
-        error: error.message,
-        details: error
-      });
+    for (const table of tables) {
+      const { error } = await supabase.from(table).select('id').limit(1);
+      if (error) {
+        results[table] = { success: false, error: error.message };
+        overallSuccess = false;
+      } else {
+        results[table] = { success: true };
+      }
     }
 
-    res.json({ 
-      success: true, 
-      message: "Successfully connected to Supabase!",
-      data 
-    });
+    if (overallSuccess) {
+      res.json({ 
+        success: true, 
+        message: "All tables connected and accessible!",
+        details: results
+      });
+    } else {
+      res.status(400).json({ 
+        success: false, 
+        error: "Some tables failed connection. Check your Supabase schema.",
+        details: results
+      });
+    }
   } catch (err: any) {
     res.status(500).json({ 
       success: false, 

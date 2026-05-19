@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS tracks (
   plays INTEGER NOT NULL DEFAULT 0,
   likes INTEGER NOT NULL DEFAULT 0,
   tags TEXT[] DEFAULT '{}',
-  status TEXT NOT NULL CHECK (status IN ('ready', 'sent', 'processing')) DEFAULT 'processing',
+  status TEXT NOT NULL CHECK (status IN ('ready', 'processing', 'error')) DEFAULT 'processing',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS clients (
   email TEXT UNIQUE NOT NULL,
   avatar_url TEXT,
   company TEXT,
-  status TEXT CHECK (status IN ('online', 'offline')) DEFAULT 'offline',
+  status TEXT CHECK (status IN ('online', 'offline', 'away')) DEFAULT 'offline',
   last_active TIMESTAMPTZ DEFAULT NOW(),
   tags TEXT[] DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -62,14 +62,14 @@ CREATE TABLE IF NOT EXISTS share_links (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Activity Table
+-- Activities Table
 CREATE TABLE IF NOT EXISTS activities (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   type TEXT NOT NULL,
   track_id UUID REFERENCES tracks(id) ON DELETE SET NULL,
   playlist_id UUID REFERENCES playlists(id) ON DELETE SET NULL,
   client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
-  "user" TEXT,
+  "user" UUID,
   action TEXT,
   target TEXT,
   details TEXT,
@@ -96,8 +96,10 @@ CREATE TABLE IF NOT EXISTS promo_videos (
   video_url TEXT NOT NULL,
   thumbnail_url TEXT,
   style TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('processing', 'ready', 'failed')) DEFAULT 'processing',
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  status TEXT NOT NULL CHECK (status IN ('processing', 'ready', 'error')) DEFAULT 'processing',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  video_data JSONB DEFAULT '{}'::jsonb,
+  thumbnail_data JSONB DEFAULT '{}'::jsonb
 );
 
 -- Promo Packs Table
@@ -118,7 +120,16 @@ CREATE TABLE IF NOT EXISTS profiles (
   bio TEXT,
   email TEXT,
   avatar_url TEXT,
-  social_links JSONB DEFAULT '{}'::jsonb
+  social_links JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Todos Table
+CREATE TABLE IF NOT EXISTS todos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title TEXT NOT NULL,
+  completed BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Enable RLS
@@ -131,6 +142,7 @@ ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE promo_videos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE promo_packs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE todos ENABLE ROW LEVEL SECURITY;
 
 -- Public Policies (Using DO block to avoid 'already exists' errors)
 DO $$
@@ -161,5 +173,8 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Access' AND tablename = 'profiles') THEN
         CREATE POLICY "Public Access" ON profiles FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Access' AND tablename = 'todos') THEN
+        CREATE POLICY "Public Access" ON todos FOR ALL USING (true) WITH CHECK (true);
     END IF;
 END $$;
