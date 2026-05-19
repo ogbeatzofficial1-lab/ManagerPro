@@ -98,7 +98,7 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
               const sanitizedDbItems = locally.map(item => {
                 const copy = { ...item };
                 Object.keys(copy).forEach(key => {
-                  if (key.startsWith('_') || key.endsWith('_data')) {
+                  if (key.startsWith('_') || key.endsWith('_data') || key === 'created_at') {
                     delete (copy as any)[key];
                   }
                 });
@@ -139,7 +139,7 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
                 // Try migrating profile
                 const sanitizedProf = { ...locallyProf };
                 Object.keys(sanitizedProf).forEach(key => {
-                  if (key.startsWith('_') || key.endsWith('_data')) {
+                  if (key.startsWith('_') || key.endsWith('_data') || key === 'created_at') {
                     delete (sanitizedProf as any)[key];
                   }
                 });
@@ -292,7 +292,7 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
     };
 
     const channel = supabase
-      .channel('public-db-changes')
+      .channel('app:db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tracks' }, (p) => handleChanges(p, setTracks, 'Tracks'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'playlists' }, (p) => handleChanges(p, setPlaylists, 'Playlists'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'activities' }, (p) => handleChanges(p, setActivities, 'Activities'))
