@@ -63,13 +63,13 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
             return data;
           };
 
-          const trData = await fetchSafely('tracks');
-          const plData = await fetchSafely('playlists');
-          const clData = await fetchSafely('clients');
-          const slData = await fetchSafely('share_links');
-          const actData = await fetchSafely('activities');
-          const msgData = await fetchSafely('messages');
-          const pvData = await fetchSafely('promo_videos');
+          const trData = (await fetchSafely('tracks')) || [];
+          const plData = (await fetchSafely('playlists')) || [];
+          const clData = (await fetchSafely('clients')) || [];
+          const slData = (await fetchSafely('share_links')) || [];
+          const actData = (await fetchSafely('activities')) || [];
+          const msgData = (await fetchSafely('messages')) || [];
+          const pvData = (await fetchSafely('promo_videos')) || [];
 
           // Fallback + Migration
           let apiDb: any = null;
@@ -104,7 +104,16 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
                 });
                 return copy;
               });
-              const { error } = await supabase!.from(tableName).insert(sanitizedDbItems);
+              const cleanItems = sanitizedDbItems.map((item: any) => {
+                const cleaned = { ...item };
+                delete cleaned.file_data;
+                delete cleaned.image_data;
+                delete cleaned.video_data;
+                delete cleaned.thumbnail_data;
+                delete cleaned._brokenBlob;
+                return cleaned;
+              });
+              const { error } = await supabase!.from(tableName).upsert(cleanItems, { onConflict: 'id' });
               if (error) {
                 console.error(`🔴 Failed to migrate ${tableName} to Supabase:`, error.message, error.details);
               } else {
@@ -123,7 +132,7 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
           setMessages(await safeParseList(msgData, 'mm_messages', 'messages'));
           setPromoVideos(await safeParseList(pvData, 'mm_promo_videos', 'promo_videos'));
           
-          const { data: profData, error: profError } = await supabase.from('profiles').select('*').single();
+          const { data: profData, error: profError } = await supabase.from('profiles').select('*').maybeSingle();
           if (profError && profError.code !== 'PGRST116') { // Ignore zero rows error for profile
             console.warn("Profile fetch error:", profError);
           }
@@ -143,7 +152,9 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
                     delete (sanitizedProf as any)[key];
                   }
                 });
-                const { error } = await supabase.from('profiles').insert(sanitizedProf);
+                delete (sanitizedProf as any).file_data;
+                delete (sanitizedProf as any).image_data;
+                const { error } = await supabase.from('profiles').upsert(sanitizedProf, { onConflict: 'id' });
                 if (error) {
                   console.error("🔴 Failed to migrate profile to Supabase:", error.message);
                 } else {
@@ -312,7 +323,7 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, profile?.id]);
+  }, [profile?.id]);
 
 
   const safeSave = async (key: string, data: any) => {
@@ -720,7 +731,7 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
         .from('share_links')
         .select('*')
         .eq('token', token)
-        .single();
+        .maybeSingle();
 
       if (linkError || !linkData) return null;
 
@@ -735,14 +746,14 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
           .from('tracks')
           .select('*')
           .eq('id', link.track_id)
-          .single();
+          .maybeSingle();
         if (tr) track = tr as Track;
       } else if (link.playlist_id) {
         const { data: pl } = await supabase
           .from('playlists')
           .select('*')
           .eq('id', link.playlist_id)
-          .single();
+          .maybeSingle();
         
         if (pl) {
            playlist = pl as Playlist;
