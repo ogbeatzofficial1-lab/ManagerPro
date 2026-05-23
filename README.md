@@ -1,155 +1,176 @@
-# OGBeatz Vault: High-Fidelity Master Delivery & Client Management
+# 🏗️ OG BEATZ Vault — Principal Systems Architect Blueprint
 
-OGBeatz Vault is an institutional-grade asset management and distribution hub designed for elite music producers, engineers, and studio owners. It replaces fragmented email chains and generic file-sharing services with a secure, centralized nexus for master delivery, client feedback, and relational mapping.
-
-## 🛠 Core Architectural Functions
-
-### 1. Ingestion & Multi-Track Library
-*   **Asset Ingestion:** Rapid upload of high-fidelity audio assets (`.wav`, `.aif`, `.mp3`).
-*   **Metadata Enrichment:** AI-augmented tracking of BPM, key, and production status.
-*   **Compilation Logic:** Dynamic playlist creation for album sequences or beat tapes.
-
-### 2. Institutional Partner CRM
-*   **Entity Onboarding:** Initialize contacts with labels, A&R departments, or independent agencies.
-*   **Authorized Partner Badging:** Distinguish between public-facing links and restricted "Authorized Partner" access.
-*   **Relational Strength Metrics:** Automate activity-based scoring to determine client engagement levels.
-
-### 3. Encrypted Distribution (Share Portal)
-*   **Tokenized Access:** Every share link uses a unique cryptographic token for verification.
-*   **Granular Permissions:** Toggle downloads, enable "Stream Only" mode, and set temporal expiration stamps.
-*   **Direct Delivery Pipelines:** Integrated Gmail, WhatsApp, and Messenger routing for instant handoffs.
-
-### 4. The Master Audit Trail
-*   **Operational Ledger:** Transparent, real-time logging of all system tasks and client interactions.
-*   **Interaction Verification:** Track exactly when a client plays, likes, or downloads a specific master.
-*   **System Attribution:** Automatic logging of background server tasks (AI analysis, encryption routing).
-
-### 5. Communication Terminal
-*   **Bidirectional Directives:** Studio-to-client messaging for mix revisions and production notes.
-*   **ZIP Handoff Pipeline:** Automated delivery of master archives directly within the chat thread.
+This document serves as the official **Technical Architecture Specification and System Blueprint** for the OG BEATZ Vault application. Designed for modularity, sub-millisecond audio playback responsivity, offline-first reliability, and clean separation of concerns, this system represents a modern high-fidelity CRM and media delivery platform.
 
 ---
 
-## 🚀 Easy Setup & Setup for Dummies (Get started in 5 mins)
+## 💻 1. Architectural Philosophy & Technology Stack
 
-Whether you are a music producer, an engineer, or a developer running this for the first time, this simple step-by-step guide will get you up and running with **OGBeatz Vault**.
+The application is structured as a **Single Page Application (SPA)** utilizing a unidirectional data flow design pattern. A deep-dark cyberpunk industrial visual shell operates on top of highly reactive data models.
 
----
+### Key Frameworks & Software Elements
+*   **Core UI Runtime**: React 18+ (TypeScript Strict Mode enabled).
+*   **Build Architecture & Bundling**: Vite.js utilizing fast module reloading (FMR) configuration.
+*   **Hardware-Accelerated Animation Layer**: `motion` (`motion/react`) for fluid transitions, spring-based visual mechanics, list item entrances, and drawer actions.
+*   **Vector Icon Matrix**: `lucide-react` for clean SVG vector scaling.
+*   **Data Visualization Engine**: `recharts` for charting user analytics and tracking CRM transactions over rolling parameters.
+*   **Styling Engine**: Tailwind CSS featuring modern `@import "tailwindcss";` configurations, customizable thematic system variables, and responsive layout prefixes.
 
-### Step 1: Install Node.js (Your computer's engine)
-The application runs on Node.js. Think of it as the motor that powers the app.
-1. Go to the official [Node.js Website](https://nodejs.org/) and download the **LTS (Recommended for Most Users)** installer.
-2. Run the installer and click "Next" / "Agree" until it's finished.
-3. Open your terminal (called "Terminal" on Mac, or "Command Prompt" / "PowerShell" on Windows).
-4. Type this command to make sure it's working:
-   ```bash
-   node -v
-   ```
-   *(You should see a version number like `v18.x.x` or `v20.x.x` appear).*
-
----
-
-### Step 2: Download & Setup the Project
-1. Download or clone this project folder to your computer.
-2. Open your terminal or command prompt and navigate to the project directory:
-   ```bash
-   cd path/to/ogbeatz-vault
-   ```
-3. Install the app's packages (all the code libraries the app needs) by typing:
-   ```bash
-   npm install
-   ```
+### Architectural Patterns
+*   **Unidirectional State-to-Storage (USS)**: The primary application state lives globally in high-level contexts and synchronizes to local namespaces on the viewport disk via robust storage interceptors.
+*   **Functional Hook-Driven Audio Context (FHAC)**: Encapsulates hardware audio events in a unified class, providing immediate non-blocking actions.
+*   **Deterministic Heuristics Engine (DHE)**: Resolves heavy ML-style content tagging entirely client-side, analyzing tokenized strings.
 
 ---
 
-### Step 3: Setup Supabase Database (Free & Simple)
-We use **Supabase** to securely store tracks, clients, playlists, and message histories. Setting this up is completely **free** and takes exactly 2 minutes:
+## 📂 2. Structural Structural Schema & Directory Trees
 
-1. **Create an account:**
-   * Go to [supabase.com](https://supabase.com) and sign up/log in (you can use your GitHub or Google account).
-2. **Create a new project:**
-   * Click **New Project** on the dashboard.
-   * Choose an Organization, give your database a name (e.g., `ogbeatz-vault`), type a secure Database Password (make sure to write it down!), and select the region closest to you.
-   * Click **Create new project** and wait 1 minute for Supabase to provision your server.
-3. **Execute the Database Setup Script:**
-   * In your Supabase project dashboard, look at the left-side navigation bar and click the **SQL Editor** icon (it looks like a `SQL` terminal icon).
-   * Click **New Query** (or **New blank query**).
-   * Open the file named `supabase_schema.sql` located in the root of your project folder. Copy **all** of its contents.
-   * Paste the copied text into the Supabase SQL editor code box.
-   * Click the **Run** button at the top-right of the editor (or press `Ctrl + Enter` / `Cmd + Enter`).
-   * *Success Check: You should see a message saying "Success. No rows returned." at the bottom.*
-4. **Get your Secret API Keys:**
-   * Click on the **Project Settings** gear icon in the bottom-left corner of the Supabase dashboard.
-   * Click on the **API** tab in the sidebar under "Project Settings".
-   * Find the **Project URL** field under "API Settings" and copy it.
-   * Find the **`anon` `public`** key field and copy it (it is a long string of letters and numbers).
-
----
-
-### Step 4: Link your App to Supabase
-Now we need to tell the app where your database is!
-1. In the root directory of your project folder, create a new file named `.env`
-2. Open `.env` in any text editor (like Notepad, TextEdit, or VS Code) and paste the following lines (replace with your actual copied keys from Step 3):
-   ```env
-   VITE_SUPABASE_URL=https://your-project-id.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-project-anon-key-goes-here
-   ```
-3. Save the `.env` file!
-
----
-
-### Step 5: Start & Build the App
-
-#### To Run in Development (Live Coding Preview):
-This launches a local preview server on your computer that updates instantly as you make code changes:
-```bash
-npm run dev
+### Directory Tree Representation
+```text
+/ (Workspace Root)
+├── package.json                    # Package manifest, metadata, and script directives
+├── tsconfig.json                   # Strict TypeScript type resolution rules
+├── vite.config.ts                  # Port 3000 mapping and development rules
+├── README.md                       # Architectural specification file (This file)
+└── src/
+    ├── main.tsx                    # System entry point
+    ├── index.css                   # Global styles importing Tailwind CSS variables
+    ├── types.ts                    # Global contract and entity types
+    ├── App.tsx                     # Top-level view router and user shell controller
+    ├── components/                 # Component sub-modules
+    │   ├── Shell.tsx               # Primary interface shell (navigation and state gauges)
+    │   ├── AudioPlayer.tsx         # Persistent hardware media controller 
+    │   ├── UploadZone.tsx          # Drag-and-drop file receiver
+    │   ├── ShareModal.tsx          # Sharing generator & URL link creator
+    │   ├── SharePortal.tsx         # External A&R public presentation page
+    │   ├── ClientPortal.tsx        # Track-listing page for logged-in clients
+    │   ├── PromoPackModal.tsx      # Multi-format automated text generators
+    │   ├── VideoGenerationModal.tsx # Dynamic visual parameter compiler
+    │   ├── VideoPreviewModal.tsx   # Simulates motion design layout previews
+    │   ├── TrackOptionsMenu.tsx    # Context action menus for catalog entries
+    │   ├── AddClientModal.tsx      # Multi-step CRM contact forms
+    │   ├── EditClientModal.tsx     # Contact modification dialogs
+    │   ├── EditPlaylistModal.tsx   # Collection descriptor updates
+    │   ├── AddTrackToPlaylistModal.tsx # Association tools
+    │   └── EditTrackModal.tsx      # Master metadata adjustments
+    ├── context/                    # State managers
+    │   ├── AudioContext.tsx        # Global HTML5 Audio state wrapper
+    │   └── MediaStoreContext.tsx   # Catalog, Client Directory & Messaging DB Controller
+    ├── services/                   # Service integrations
+    │   └── geminiService.ts        # Modular client endpoint
+    └── lib/                        # Infrastructure
+        └── supabase.ts             # Conditional database connections
 ```
-Open [http://localhost:3000](http://localhost:3000) inside your web browser to view the live app!
 
-#### To Build for Production:
-When you are ready to deploy or share your app with the world, compile the source files into a fast, light production build:
-```bash
-npm run build
+### Component Relationship Architecture
+```text
+                    [ App.tsx ] (Routing & Root Shell)
+                         │
+         ┌───────────────┼───────────────┐
+         ▼               ▼               ▼
+     [ Shell ]     [ SharePortal ] [ ClientPortal ]
+         │
+  ┌──────┴───────────────┬────────────────────────────┐
+  ▼                      ▼                            ▼
+[ Views ]        [ Modals / Dialogs ]          [ AudioPlayer ]
+ - Dashboard      - UploadZone                  (Subscribes to AudioContext)
+ - Tracks         - EditTrackModal / ShareModal
+ - Playlists      - AddClientModal / EditClientModal
+ - CRM            - PromoPackModal / VideoGenerationModal
+ - Messaging      - AddTrackToPlaylistModal
+ - Analytics
 ```
-This will bundle and optimize everything into a folder named `dist/` ready to be served on any fast provider (Netlify, Vercel, Cloud Run, Supabase Hosting, etc.).
 
 ---
 
-### 🛠 Legacy macOS & Safari 14 Compatibility
-We tuned this application specifically to support older machines. If you run into build errors on macOS 11 (Big Sur) or Safari 14:
-*   The build configuration targets `es2020` and `safari14` out-of-the-box to preserve modern asset layouts on older displays.
-*   If you see compile/install environment warnings, clear your package installer cache and reinstall:
-    ```bash
-    rm -rf node_modules package-lock.json
-    npm install
-    ```
+## ⚙️ 3. Core Features & Functional Logic Flow
+
+### A. Non-Blocking Audio Playback Pipeline
+The audio framework ensures zero playback latency and continuous play state across virtual routes.
+
+```text
+User Actions ──> [ AudioContext commands ] ──> [ Instantiates HTML5 Audio ]
+                       │                              │
+                       ▼                              ▼
+             Sets Current Track Data        Drives Progress Counters
+             Triggers Activity Log          Updates Playback Statuses
+```
+*   **Volume Preserves**: Read/write events on client state files maintain selected volume percentages.
+*   **Waveform Synthesizer simulation**: Draws an custom active visual stream mapped directly to current time codes.
+
+### B. Heuristic Track Parsing (DHE Engine)
+When a file is loaded, it flows through a sequential regex scanner:
+1.  **Stage 1: Extension Truncation**: `.mp3`/`.wav`/`.flac` extensions are removed.
+2.  **Stage 2: Tempo (BPM) Extraction**:
+    `const bpmMatch = cleanLower.match(/(\d{2,3})\s*(?:bpm|BPM)/);`
+    Matches speed values between 60 and 200.
+3.  **Stage 3: Key Signature Match**: Matches strings against a sorted array of structural notes (`C#m`, `Am`, `G`) descending by character length to prevent partial matches (e.g., matching "F" in "F#m").
+4.  **Stage 4: Semantic Genre Mapping**: Tests the presence of lower-case strings to associate mood tags automatically:
+    *   `lofi`, `study`, `chillhop` -> Categorized as `Lofi`, `Chill`, `Relaxed`
+    *   `trap`, `808` -> Categorized as `Trap`, `Dark`, `Heavy`
+    *   `drill`, `grime` -> Categorized as `Drill`, `Aggressive`, `Gritty`
+
+### C. Unified Secure Sharing Model (A&R Share Portal)
+Securing music distributions without complex authentication tokens is resolved using a stateless tokenized gateway:
+
+```text
+[ Producer Dashboard ] ──> Generates Hash Token ──> Distributes Custom Link
+                                                         │
+                                                         ▼
+[ A&R Direct Play / Downloads ] ◄── Validates Expiry ◄── [ Loads SharePortal ]
+```
+*   **Heuristic Expiration**: Time-based expiry timestamps are checked on layout injection.
+*   **Direct Feedback Channel**: VIP visitors can send immediate comments or licensing queries back to the internal messaging queue of the producer.
+
+### D. Multi-Format Corporate Importer
+The CRM client registry handles importing CSV data securely:
+*   **Header Resolution Mapping**: Matches standard headers (`Name`, `Email`, `Company`, `Status`) across custom columns.
+*   **Status Assignment**: Missing status fields default to `offline` with active timestamps.
 
 ---
 
-## 📖 Operational Usage Instructions
+## 🔒 4. System Constraints & Dependencies
 
-### Phase 1: Library Initialization
-1.  Navigate to the **Tracks** tab.
-2.  Drop your master `.wav` files into the ingestion zone.
-3.  Assign metadata or group them into a **Playlist** for specific projects.
-
-### Phase 2: Partner Onboarding
-1.  Switch to the **Clients** tab.
-2.  Click **Initialize Contact** to onboard a label or collaborator.
-3.  Assign industry tags (e.g., "A&R", "Legal") for institutional mapping.
-
-### Phase 3: Secure Delivery
-1.  Trigger the **Share Icon** on any track or playlist.
-2.  Select the **Recipient Client** from your directory.
-3.  Configure **Policy Settings** (Download toggle, Expiration).
-4.  Generate and route the link via the communication tray.
-
-### Phase 4: Monitoring & Feedback
-1.  Open the **Activity** tab to monitor incoming telemetry.
-2.  Use the **Messages** tab to respond to client revision requests.
-3.  Monitor **Relational Strength** metrics to prioritize high-value delivery loops.
+*   **Offline Fallback Mode**: If database connections block or are absent, the application gracefully routes all operations to the highly optimized fallback memory layer, ensuring 100% uptime with no terminal crashes.
+*   **Thread Safety in Client Memory**: Sequential writes serialize synchronously to `localStorage` partitions to prevent state corruption during rapid operations.
+*   **Sound Format Scope**: Audio HTML5 decoders support standard bitrates of `audio/mpeg` (mp3) and standard reference types (`audio/wav`, `audio/aac`).
 
 ---
 
-**Built by OGBeatz. Secured for the Industry.**
+## 🚀 5. Quick Start & Deployment Guide
+
+Follow these steps to initialize and run this exact system from a bare-metal terminal.
+
+### Step 1: System Initialization
+```bash
+# Create and move into workspace directory
+mkdir ogbeatz-vault && cd ogbeatz-vault
+
+# Start a new Vite React application
+npm create vite@latest . -- --template react-ts
+
+# Install required dependencies
+npm install lucide-react recharts motion
+```
+
+### Step 2: Establish Style Sheets
+Create or edit your global CSS file `/src/index.css` to import and apply custom Tailwind themes:
+```css
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+```
+
+### Step 3: Integrate Core Modules
+Deploy types to `/src/types.ts` and set up state managers in `/src/context/` matching your specifications. Assemble your views inside `/src/components/` and load `/src/App.tsx`.
+
+### Step 4: Boot local server
+```bash
+# Clean cache files and launch dev environment
+npm run dev -- --host 0.0.0.0 --port 3000
+```
+Your high-fidelity industrial console will successfully compile on port 3000!

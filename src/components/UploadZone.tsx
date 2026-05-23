@@ -7,8 +7,9 @@ export default function UploadZone({ onSuccess }: { onSuccess: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [artwork, setArtwork] = useState<File | null>(null);
   const [artworkUrl, setArtworkUrl] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const artworkInputRef = useRef<HTMLInputElement>(null);
-  const { addTrack, analyzeTrack } = useMediaStore();
+  const { addTrack, analyzeTrack, uploadFile } = useMediaStore();
 
   const handleFile = async (f: File) => {
     if (f.type.startsWith('image/')) {
@@ -25,38 +26,59 @@ export default function UploadZone({ onSuccess }: { onSuccess: () => void }) {
   const handleUpload = async () => {
     if (!file) return;
 
-    // Get actual audio duration
-    const audioForDuration = new Audio();
-    const audioUrlForDuration = URL.createObjectURL(file);
-    audioForDuration.src = audioUrlForDuration;
-    
-    const duration = await new Promise<number>((resolve) => {
-      audioForDuration.onloadedmetadata = () => {
-        resolve(audioForDuration.duration);
-        URL.revokeObjectURL(audioUrlForDuration);
-      };
-      // Fallback if metadata fails
-      setTimeout(() => resolve(0), 2000);
-    });
+    try {
+      setUploadStatus("Extracting master duration...");
+      // Get actual audio duration
+      const audioForDuration = new Audio();
+      const audioUrlForDuration = URL.createObjectURL(file);
+      audioForDuration.src = audioUrlForDuration;
+      
+      const duration = await new Promise<number>((resolve) => {
+        audioForDuration.onloadedmetadata = () => {
+          resolve(audioForDuration.duration);
+          URL.revokeObjectURL(audioUrlForDuration);
+        };
+        // Fallback if metadata fails
+        setTimeout(() => resolve(0), 2000);
+      });
 
-    const analysis = await analyzeTrack(file.name);
-    const audioUrl = URL.createObjectURL(file);
-    
-    await addTrack({
-      name: file.name.replace(/\.[^/.]+$/, ""),
-      size: file.size,
-      type: file.type,
-      file_url: audioUrl,
-      file_data: file, // For persistence
-      duration: duration,
-      bpm: analysis.bpm,
-      key_signature: analysis.key,
-      tags: analysis.tags || [],
-      image_url: artworkUrl,
-      image_data: artwork,
-    });
-    
-    onSuccess();
+      setUploadStatus("Analyzing BPM and key characteristics...");
+      const analysis = await analyzeTrack(file.name);
+
+      setUploadStatus("Uploading high-fidelity audio master...");
+      const finalAudioUrl = await uploadFile('tracks', file);
+      
+      let finalArtworkUrl = artworkUrl;
+      if (artwork) {
+        setUploadStatus("Uploading artwork cover...");
+        const uploadedArtUrl = await uploadFile('artwork', artwork);
+        if (uploadedArtUrl) {
+          finalArtworkUrl = uploadedArtUrl;
+        }
+      }
+      
+      setUploadStatus("Committing meta handshake to Supabase...");
+      await addTrack({
+        name: file.name.replace(/\.[^/.]+$/, ""),
+        size: file.size,
+        type: file.type,
+        file_url: finalAudioUrl || URL.createObjectURL(file), // Fallback if upload fails
+        file_data: file, // For local cache
+        duration: duration,
+        bpm: analysis.bpm,
+        key_signature: analysis.key,
+        tags: analysis.tags || [],
+        image_url: finalArtworkUrl,
+        image_data: artwork || undefined,
+      });
+      
+      setUploadStatus(null);
+      onSuccess();
+    } catch (e) {
+      console.error("Upload process failed:", e);
+      setUploadStatus(null);
+      alert("Asset shipment aborted. Check network configuration or permissions.");
+    }
   };
 
   return (
@@ -138,10 +160,10 @@ export default function UploadZone({ onSuccess }: { onSuccess: () => void }) {
              <input type="file" ref={artworkInputRef} accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files![0])} />
 
              <button 
-                onClick={handleUpload}
+                onClick={handleUpload} disabled={!!uploadStatus}
                 className="w-full py-4 bg-orange-500 text-black rounded-xl font-black uppercase tracking-widest text-[10px] hover:scale-105 transition-all shadow-lg shadow-orange-500/20"
              >
-                Commit Master to Hub
+                {uploadStatus || "Commit Master to Hub"}
              </button>
           </div>
         )}

@@ -28,7 +28,7 @@ export default function AddClientModal({ onClose }: { onClose: () => void }) {
                 value={formData.name} 
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full mt-2 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:border-orange-500"
-                placeholder="Drake, Future, etc."
+                placeholder="e.g. John Doe"
               />
             </label>
             <label className="block">

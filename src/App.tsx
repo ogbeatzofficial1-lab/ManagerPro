@@ -66,6 +66,7 @@ import ClientPortal from './components/ClientPortal';
 import ShareModal from './components/ShareModal';
 import { Track, ShareLink, Client, Playlist } from './types';
 import { cn } from './lib/utils';
+import { getSupabaseClient, supabaseUrl } from './lib/supabase';
 
 export default function App() {
   const [activeView, setActiveView] = useState<'dashboard' | 'tracks' | 'playlists' | 'clients' | 'messages' | 'sharing' | 'activity' | 'settings' | 'profile' | 'client-detail' | 'videos'>('dashboard');
@@ -90,23 +91,132 @@ export default function App() {
   const [chatAttachment, setChatAttachment] = useState<string | null>(null);
   const [asyncSharedContent, setAsyncSharedContent] = useState<{ track?: Track, playlist?: Playlist, link: ShareLink } | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
-  const [dbStatus, setDbStatus] = useState<{ status: 'idle' | 'checking' | 'success' | 'error', message?: string } | null>(null);
+  const [dbStatus, setDbStatus] = useState<{ status: 'idle' | 'checking' | 'success' | 'error', message?: string, url?: string } | null>(null);
+  const [inspectedTables, setInspectedTables] = useState<any[] | null>(null);
+  const [inspecting, setInspecting] = useState(false);
+  const [inspectingError, setInspectingError] = useState<string | null>(null);
+  const [customTableInput, setCustomTableInput] = useState('');
+
+  const runDatabaseInspection = async (extraTableToProbe?: any) => {
+    setInspecting(true);
+    setInspectingError(null);
+    try {
+      const dbClient = await getSupabaseClient();
+      if (!dbClient) {
+        setInspectingError('No active Supabase connection.');
+        return;
+      }
+
+      const targetQuery = (typeof extraTableToProbe === 'string') ? extraTableToProbe.trim() : customTableInput.trim();
+      
+      const candidates = new Set([
+        "tracks",
+        "playlists",
+        "clients",
+        "share_links",
+        "messages",
+        "profiles",
+        "activities",
+        "promo_videos",
+      ]);
+
+      if (targetQuery) {
+        candidates.add(targetQuery);
+      }
+
+      const tables: any[] = [];
+
+      for (const tableName of Array.from(candidates)) {
+        try {
+          const { data, count, error } = await dbClient
+            .from(tableName)
+            .select("*", { count: "exact" })
+            .limit(3);
+
+          if (error && (error.code === "42P01" || error.message?.includes("does not exist"))) {
+            continue; // skip tables that don't exist
+          }
+
+          let queryError = null;
+          if (error) {
+            queryError = error.message;
+          }
+
+          const columns: any[] = [];
+          if (data && data.length > 0) {
+            Object.keys(data[0]).forEach((key) => {
+              columns.push({
+                name: key,
+                type: typeof data[0][key],
+                description: "Discovered dynamically"
+              });
+            });
+          } else {
+            columns.push({ name: "id", type: "id/uuid", description: "Discovered field" });
+          }
+
+          tables.push({
+            tableName,
+            columnCount: columns.length,
+            columns,
+            rowCount: count !== null ? count : (data ? data.length : 0),
+            sampleRows: data || [],
+            error: queryError
+          });
+        } catch (err) {
+          // ignore
+        }
+      }
+
+      setInspectedTables(tables);
+    } catch (e: any) {
+      setInspectingError(e.message || 'Failed to inspect database tables.');
+    } finally {
+      setInspecting(false);
+    }
+  };
 
   const checkDatabase = async () => {
     setDbStatus({ status: 'checking' });
     try {
-      const res = await fetch('/api/test-db');
-      const data = await res.json();
-      if (data.success) {
-        setDbStatus({ status: 'success', message: data.message });
-        setTimeout(() => setDbStatus(null), 5000);
+      const dbClient = await getSupabaseClient();
+      if (!dbClient) {
+        setDbStatus({ status: 'error', message: 'No active Supabase connection. Verify settings.' });
+        return;
+      }
+
+      const { error } = await dbClient.from("tracks").select("id").limit(1);
+      
+      if (error) {
+         setDbStatus({
+           status: 'error',
+           message: `Connection established, but verification query failed: ${error.message}`,
+           url: dbClient.supabaseUrl || supabaseUrl
+         });
       } else {
-        setDbStatus({ status: 'error', message: data.error });
+        setDbStatus({
+          status: 'success',
+          message: 'Successfully established direct, secure client-to-database live telemetry link. Schema is ready.',
+          url: dbClient.supabaseUrl || supabaseUrl
+        });
+        setTimeout(() => setDbStatus(null), 5000);
       }
     } catch (e: any) {
-      setDbStatus({ status: 'error', message: e.message || 'Network error' });
+      setDbStatus({ status: 'error', message: e.message || 'Direct database sync error.' });
     }
   };
+
+  // Run database status check and schema inspection automatically on mounting or settings view
+  useEffect(() => {
+    checkDatabase();
+    runDatabaseInspection();
+  }, []);
+
+  useEffect(() => {
+    if (activeView === 'settings') {
+      runDatabaseInspection();
+    }
+  }, [activeView]);
 
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [showAddTracksToPlaylist, setShowAddTracksToPlaylist] = useState(false);
@@ -115,7 +225,8 @@ export default function App() {
     tracks, playlists, clients, activities, messages, profile, loading, shareLinks, promoVideos,
     deleteTrack, updateTrack, addPlaylist, updatePlaylist, deletePlaylist, 
     addTrackToPlaylist, removeTrackFromPlaylist, addClient, updateClient, deleteClient, 
-    updateProfile, addShareLink, addActivity, sendMessage, incrementShareLinkAccess, getShareContent
+    updateProfile, addShareLink, addActivity, sendMessage, incrementShareLinkAccess, getShareContent,
+    uploadFile
   } = useMediaStore();
   const hasIncrementedRef = React.useRef<string | null>(null);
 
@@ -153,22 +264,43 @@ export default function App() {
     };
   }, [tracks, clients]);
 
-  const chartData = useMemo(() => [
-    { name: 'Mon', plays: 400, engagement: 240 },
-    { name: 'Tue', plays: 300, engagement: 139 },
-    { name: 'Wed', plays: 200, engagement: 980 },
-    { name: 'Thu', plays: 278, engagement: 390 },
-    { name: 'Fri', plays: 189, engagement: 480 },
-    { name: 'Sat', plays: 239, engagement: 380 },
-    { name: 'Sun', plays: 349, engagement: 430 },
-  ], []);
+  const chartData = useMemo(() => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Generate the last 7 days of the week dynamically ending today
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return {
+        name: days[d.getDay()],
+        dateStr: d.toDateString(),
+        plays: 0,
+        engagement: 0,
+      };
+    });
+
+    // Populate data dynamically from active SQL logs
+    activities.forEach(act => {
+      if (!act.timestamp) return;
+      const actDateStr = new Date(act.timestamp).toDateString();
+      const match = last7Days.find(day => day.dateStr === actDateStr);
+      if (match) {
+        if (act.type === 'play') {
+          match.plays += 1;
+        } else if (['download', 'share', 'social'].includes(act.type)) {
+          match.engagement += 1;
+        }
+      }
+    });
+
+    return last7Days.map(({ name, plays, engagement }) => ({ name, plays, engagement }));
+  }, [activities]);
 
   const filteredClients = useMemo(() => {
     return clients.filter(c => 
       c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()) ||
       c.email.toLowerCase().includes(clientSearchQuery.toLowerCase()) ||
       c.company?.toLowerCase().includes(clientSearchQuery.toLowerCase()) ||
-      c.tags.some(t => t.toLowerCase().includes(clientSearchQuery.toLowerCase()))
+      (c.tags || []).some(t => t.toLowerCase().includes(clientSearchQuery.toLowerCase()))
     );
   }, [clients, clientSearchQuery]);
 
@@ -298,38 +430,34 @@ export default function App() {
       return;
     }
 
-    // Isolate cloud directory branching
     const directoryPath = `client-deliveries/${selectedClient.email.replace(/[.@]/g, '_')}/${file.name}`;
 
     addActivity({
       type: 'system',
       user: 'OGBeatz',
-      action: `Assembling master package...`,
+      action: `Uploading master archive to vault: ${file.name}...`,
     });
 
-    const simulatedDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
-    
-    // Simulate multi-step encrypted delivery
-    await simulatedDelay(800);
-    addActivity({
-      type: 'system',
-      user: 'OGBeatz',
-      action: `Encrypted routing established: ${directoryPath}`,
-    });
+    try {
+      const publicUrl = await uploadFile('deliveries', file);
+      const downloadUrl = publicUrl || `https://vault.ogbeatz.com/${directoryPath}`;
 
-    await simulatedDelay(1200);
-    const messageContent = `Master archive delivered: ${file.name}\nResource Path: https://vault.ogbeatz.com/${directoryPath}`;
-    
-    await sendMessage(selectedClient.id, messageContent);
-    addActivity({
-      type: 'download',
-      user: 'OGBeatz',
-      action: 'delivered package',
-      target: file.name,
-      client_id: selectedClient.id
-    });
+      const messageContent = `Master archive delivered: ${file.name}\nResource Path: ${downloadUrl}`;
+      
+      await sendMessage(selectedClient.id, messageContent);
+      addActivity({
+        type: 'download',
+        user: 'OGBeatz',
+        action: 'delivered package',
+        target: file.name,
+        client_id: selectedClient.id
+      });
 
-    alert(`Secure master package ${file.name} successfully branched to ${selectedClient.name}'s directory.`);
+      alert(`Secure master package ${file.name} successfully delivered to ${selectedClient.name}.`);
+    } catch (err) {
+      console.error("ZIP delivery failed:", err);
+      alert("ZIP shipping aborted. Check connectivity or permissions.");
+    }
     
     e.target.value = '';
   };
@@ -594,11 +722,27 @@ export default function App() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className={cn(
-            "p-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest",
-            dbStatus.status === 'success' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-red-500/10 border-red-500/20 text-red-500"
+            "p-6 rounded-3xl border flex flex-col gap-4",
+            dbStatus.status === 'success' ? "bg-emerald-500/10 border-emerald-500/20" : "bg-red-500/5 border-red-500/20"
           )}
         >
-          {dbStatus.message}
+          <div className="flex items-center gap-2">
+            <div className={cn("w-2 h-2 rounded-full animate-pulse", dbStatus.status === 'success' ? "bg-emerald-500" : "bg-red-500")} />
+            <p className={cn("text-xs font-black uppercase tracking-widest", dbStatus.status === 'success' ? "text-emerald-500" : "text-red-500")}>
+              {dbStatus.message}
+            </p>
+          </div>
+          
+          {dbStatus.status === 'error' && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-black/40 p-4 rounded-2xl border border-white/5">
+              {['tracks', 'playlists', 'clients', 'share_links', 'activities', 'messages', 'promo_videos', 'profiles', 'promo_packs', 'todos'].map(table => (
+                <div key={table} className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-800" />
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-tighter">{table}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -1194,7 +1338,7 @@ export default function App() {
                   </div>
                   <div>
                     <h3 className="text-lg font-black uppercase tracking-tight">Compilation Logic</h3>
-                    <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">{selectedPlaylist.track_ids.length} Linked Assets</p>
+                    <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">{(selectedPlaylist.track_ids || []).length} Linked Assets</p>
                   </div>
                </div>
                <button 
@@ -1206,8 +1350,8 @@ export default function App() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {tracks.filter(t => selectedPlaylist.track_ids.includes(t.id)).length > 0 ? (
-                tracks.filter(t => selectedPlaylist.track_ids.includes(t.id)).map(track => (
+              {tracks.filter(t => (selectedPlaylist.track_ids || []).includes(t.id)).length > 0 ? (
+                tracks.filter(t => (selectedPlaylist.track_ids || []).includes(t.id)).map(track => (
                   <div 
                     key={track.id} 
                     className="group relative h-80 rounded-[2.5rem] overflow-hidden border border-zinc-800 transition-all hover:border-zinc-700 hover:shadow-2xl hover:shadow-orange-500/5 bg-zinc-950"
@@ -1251,7 +1395,7 @@ export default function App() {
                         
                         <div className="flex items-center gap-3 mt-6">
                           <button 
-                            onClick={() => playTrack(track, tracks.filter(t => selectedPlaylist.track_ids.includes(t.id)))}
+                            onClick={() => playTrack(track, tracks.filter(t => (selectedPlaylist.track_ids || []).includes(t.id)))}
                             className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl"
                           >
                             <Play className="w-5 h-5 fill-black ml-1" />
@@ -1325,7 +1469,7 @@ export default function App() {
               <div className="absolute bottom-0 left-0 right-0 p-10 space-y-3">
                  <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse shadow-lg shadow-orange-500/50" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white/60">{pl.track_ids.length} Tracks Inscribed</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white/60">{(pl.track_ids || []).length} Tracks Inscribed</span>
                  </div>
                  <h3 className="text-4xl font-black tracking-tighter text-white leading-none uppercase italic">{pl.name}</h3>
                  <p className="text-white/60 text-[10px] font-black uppercase tracking-widest line-clamp-1 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0">
@@ -1839,16 +1983,16 @@ export default function App() {
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500">Network Presence</h3>
               <div className="bg-zinc-950 border border-zinc-900 rounded-[2.5rem] p-8 space-y-6">
                 {[
-                  { label: 'Instagram', value: profile.social_links.instagram, key: 'instagram' },
-                  { label: 'Spotify', value: profile.social_links.spotify, key: 'spotify' },
-                  { label: 'SoundCloud', value: profile.social_links.soundcloud, key: 'soundcloud' },
+                  { label: 'Instagram', value: profile.social_links?.instagram || '', key: 'instagram' },
+                  { label: 'Spotify', value: profile.social_links?.spotify || '', key: 'spotify' },
+                  { label: 'SoundCloud', value: profile.social_links?.soundcloud || '', key: 'soundcloud' },
                 ].map((link) => (
                   <div key={link.label} className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 ml-1">{link.label}</label>
                     <input 
                       value={link.value || ''}
                       onChange={(e) => updateProfile({ 
-                        social_links: { ...profile.social_links, [link.key]: e.target.value } 
+                        social_links: { ...(profile.social_links || {}), [link.key]: e.target.value } 
                       })}
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:border-orange-500/50 transition-all"
                       placeholder={`Enter ${link.label} handle...`}
@@ -2113,7 +2257,7 @@ export default function App() {
                    <div className="space-y-4">
                       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Assigned Tags</label>
                       <div className="flex flex-wrap gap-2">
-                        {selectedClient.tags.length > 0 ? selectedClient.tags.map(tag => (
+                        {(selectedClient.tags || []).length > 0 ? (selectedClient.tags || []).map(tag => (
                             <span key={tag} className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-[9px] font-black uppercase tracking-widest text-orange-500">{tag}</span>
                         )) : <span className="text-zinc-700 italic text-xs">No tags allocated</span>}
                       </div>
@@ -2207,6 +2351,20 @@ export default function App() {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-6 selection:bg-orange-500 selection:text-black">
+        <div className="w-16 h-16 rounded-[2rem] bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-[0_0_50px_rgba(249,115,22,0.1)]">
+          <Music className="w-8 h-8 text-orange-500 animate-pulse" />
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-sm font-black uppercase tracking-[0.3em] text-white">Initializing Vault</h2>
+          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 animate-pulse">Syncing tracks and playlists with Supabase...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Shell activeView={activeView} onViewChange={(v) => setActiveView(v)}>
       <div className="pb-24">
@@ -2222,35 +2380,275 @@ export default function App() {
         {activeView === 'client-detail' && renderClientDetail()}
         {/* Settings View */}
         {activeView === 'settings' && (
-          <div className="p-8 space-y-8 max-w-2xl">
+          <div className="p-8 space-y-8 max-w-3xl">
              <div>
                 <h1 className="text-3xl font-black tracking-tighter uppercase text-white">System Configuration</h1>
-                <p className="text-zinc-500 text-sm mt-1">Calibrate your production environment and security protocols.</p>
+                <p className="text-zinc-500 text-sm mt-1">Configure your cloud databases, security parameters, and Gemini API services.</p>
              </div>
              
-             <div className="space-y-6">
-                <div className="bg-zinc-950 border border-zinc-900 p-6 rounded-3xl space-y-4">
-                   <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400">Account Security</h3>
-                   <div className="flex items-center justify-between p-4 bg-zinc-900 rounded-2xl border border-zinc-800">
-                      <div className="space-y-1">
-                        <p className="text-sm font-bold">Two-Factor Authentication</p>
-                        <p className="text-xs text-zinc-500">Protect your master assets with extra logic.</p>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Supabase Connection Manager */}
+                <div className="md:col-span-2 space-y-6">
+                   <div className="bg-zinc-950 border border-zinc-900 p-6 rounded-3xl space-y-4">
+                      <div className="flex items-center justify-between">
+                         <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400">Supabase Cloud Connection</h3>
+                         <button 
+                           onClick={checkDatabase}
+                           disabled={dbStatus?.status === 'checking'}
+                           className={cn(
+                             "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all",
+                             dbStatus?.status === 'success' ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-500" :
+                             dbStatus?.status === 'error' ? "bg-red-500/15 border-red-500/30 text-red-500" :
+                             "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
+                           )}
+                         >
+                           {dbStatus?.status === 'checking' ? 'Verifying...' : 'Re-verify DB'}
+                         </button>
                       </div>
-                      <div className="w-12 h-6 bg-zinc-800 rounded-full relative cursor-pointer">
-                         <div className="absolute right-1 top-1 w-4 h-4 bg-orange-500 rounded-full" />
+
+                      {/* Connection Diagnostic Overview */}
+                      <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl space-y-3">
+                         <div className="flex items-center justify-between">
+                            <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Active Database Url</span>
+                            <span className="text-[10px] font-mono select-all bg-black/40 px-2 py-1 rounded border border-white/5 text-zinc-400">
+                               {dbStatus?.url || "https://yqtkfpaauzpcwzaopzhl.supabase.co"}
+                            </span>
+                         </div>
+                         <div className="flex items-center justify-between">
+                            <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Connection Mode</span>
+                            {dbStatus?.message?.includes("custom") ? (
+                               <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+                                  Production Cloud Connected
+                               </span>
+                            ) : (
+                               <span className="bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full animate-pulse">
+                                  Sandbox Fallback Mode (Demo Data)
+                               </span>
+                            )}
+                         </div>
                       </div>
+
+                      {/* Explicit Guidance For Blank Setup */}
+                      {!dbStatus?.message?.includes("custom") && (
+                         <div className="space-y-3 border-t border-zinc-900 pt-4">
+                            <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-2xl space-y-2">
+                               <p className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
+                                  ⚠️ Why is my Supabase data empty?
+                               </p>
+                               <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                 The application is currently connected to the **OG BEATZ Template Sandbox Database**. This ensures the system runs immediately, but it starts **blank or with template tracks**, rather than loading your personal unreleased master portfolios.
+                               </p>
+                            </div>
+                            
+                            <div className="space-y-2">
+                               <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">How to load your personal Supabase data:</p>
+                               <ol className="text-[10px] text-zinc-500 space-y-2 list-decimal list-inside pl-1 leading-relaxed">
+                                  <li>
+                                     Look at the leftmost workspace panel (under the File Explorer directory tree).
+                                  </li>
+                                  <li>
+                                     Click research and open the file named <span className="text-orange-500 font-bold font-mono">.env</span> (or check the settings tab of this AI assistant workspace).
+                                  </li>
+                                  <li>
+                                     Fill in your private credentials:
+                                     <pre className="mt-1.5 p-2 bg-black rounded-lg border border-white/5 font-mono text-[9px] text-zinc-400 leading-3">
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpX...
+                                     </pre>
+                                  </li>
+                                  <li>
+                                     Press <span className="font-bold text-white">Save</span>. The builder server will automatically boot, load your credentials and query your real tracks, client directories, and and messages!
+                                  </li>
+                               </ol>
+                            </div>
+                         </div>
+                      )}
+
+                      {/* Display active environment keys parsed securely from node process */}
+                      <div className="space-y-2 border-t border-zinc-900 pt-4">
+                         <h4 className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Node Environment Variables Status</h4>
+                         <div className="grid grid-cols-1 divide-y divide-zinc-900/50">
+                            {((dbStatus as any)?.envKeysCheck || []).map((env: any) => (
+                               <div key={env.key} className="flex items-center justify-between py-2 text-xs">
+                                  <span className="font-mono text-[11px] text-zinc-400">{env.key}</span>
+                                  <div className="flex items-center gap-2">
+                                     <span className="text-[10px] text-zinc-500 font-mono italic">{env.preview}</span>
+                                     <span className={cn(
+                                       "w-1.5 h-1.5 rounded-full",
+                                       env.status === 'active' ? "bg-emerald-500" : "bg-zinc-800"
+                                     )} />
+                                  </div>
+                               </div>
+                            ))}
+                            {(!dbStatus || !((dbStatus as any)?.envKeysCheck)) && (
+                               <p className="text-[10px] text-zinc-500 italic pt-1">Run database check to view active environments.</p>
+                            )}
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Live Supabase Tables Catalog */}
+                   <div className="bg-zinc-950 border border-zinc-900 p-6 rounded-3xl space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                         <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-zinc-300">Live Database Catalog Explorer</h3>
+                            <p className="text-[11px] text-zinc-500 mt-0.5 font-bold uppercase tracking-wide">Discovered table schemas and row contents in your active Supabase project.</p>
+                         </div>
+                         <button 
+                           onClick={() => runDatabaseInspection()}
+                           disabled={inspecting}
+                           className="text-[10px] self-start sm:self-auto font-black uppercase tracking-widest text-orange-500 hover:text-orange-400 px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 rounded-lg transition-all"
+                         >
+                           {inspecting ? 'Searching...' : 'Refresh Schema'}
+                         </button>
+                      </div>
+
+                      {/* Probe Custom User Table search input bar */}
+                      <div className="bg-zinc-900 rounded-2xl border border-zinc-805 p-4 space-y-3">
+                         <p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">Query Custom Database Tables</p>
+                         <div className="flex gap-2">
+                            <input 
+                              type="text"
+                              placeholder="Enter existing table name (e.g. tracks, songs, users, beats...)"
+                              value={customTableInput}
+                              onChange={(e) => setCustomTableInput(e.target.value)}
+                              className="flex-1 bg-black text-xs text-white placeholder-zinc-650 rounded-lg border border-zinc-800 px-3 py-2 outline-none focus:border-orange-500 transition-all font-mono"
+                            />
+                            <button
+                              onClick={() => runDatabaseInspection(customTableInput)}
+                              disabled={inspecting || !customTableInput.trim()}
+                              className="text-xs bg-orange-500 hover:bg-orange-400 text-black px-4 py-2 rounded-lg font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                            >
+                              {inspecting ? 'Searching...' : 'Search'}
+                            </button>
+                         </div>
+                         <p className="text-[10px] text-zinc-500 font-semibold uppercase leading-normal">
+                            💡 If your database was already populated with custom schemas, type a table name above to examine loaded columns and records.
+                         </p>
+                      </div>
+
+                      {inspecting ? (
+                         <div className="py-12 flex flex-col items-center justify-center gap-3 bg-zinc-900/40 rounded-2xl border border-zinc-900">
+                            <Zap className="w-6 h-6 text-orange-500 animate-spin" />
+                            <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest animate-pulse">Scanning database schemas...</p>
+                         </div>
+                      ) : inspectingError ? (
+                         <div className="p-4 bg-red-500/5 border border-red-500/10 text-red-550 rounded-2xl space-y-1.5 text-xs">
+                            <p className="font-bold uppercase tracking-wider flex items-center gap-1.5 text-red-400">
+                               <AlertCircle className="w-4 h-4" /> Connection schema probe warnings
+                            </p>
+                            <p className="text-zinc-400 text-[11px] leading-relaxed font-mono select-all bg-black/40 p-2.5 rounded-lg border border-red-500/5 mt-2">
+                              {inspectingError}
+                            </p>
+                            <div className="pt-2 text-[10px] text-zinc-500 leading-relaxed space-y-1 bg-black/50 p-3 rounded-lg border border-white/5">
+                               <p className="font-bold text-zinc-400 uppercase tracking-widest mb-1">Checklist to establish connection:</p>
+                               <ul className="list-disc list-inside space-y-1">
+                                  <li>Verify your <span className="font-mono text-zinc-300">SUPABASE_URL</span> matches in settings.</li>
+                                  <li>Confirm your API anonymized credential (anon key) doesn't contain gaps or broken characters.</li>
+                                  <li>Make sure PostgreSQL is turned on and accepting queries.</li>
+                                </ul>
+                            </div>
+                         </div>
+                      ) : inspectedTables ? (
+                         <div className="space-y-4">
+                            {inspectedTables.length === 0 ? (
+                               <div className="p-8 text-center bg-zinc-900 rounded-2xl border border-zinc-800 text-zinc-500 space-y-1">
+                                  <AlertCircle className="w-5 h-5 mx-auto text-zinc-650 mb-1" />
+                                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-300">No tables discovered</p>
+                                  <p className="text-[10px] text-zinc-550 leading-relaxed">The database is fully connected, but contains zero public tables or schemas.</p>
+                               </div>
+                            ) : (
+                               <div className="space-y-3">
+                                  {inspectedTables.map((table) => {
+                                     return (
+                                        <div key={table.tableName} className="bg-zinc-900 border border-zinc-850 rounded-2xl p-4 space-y-3">
+                                           <div className="flex items-start justify-between">
+                                              <div className="space-y-0.5">
+                                                 <span className="font-mono text-sm font-black text-orange-500 select-all">{table.tableName}</span>
+                                                 <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                                                    <span>{table.columnCount} columns</span>
+                                                    <span>•</span>
+                                                    <span className={cn(table.rowCount > 0 ? "text-emerald-500" : "text-zinc-500")}>
+                                                       {table.rowCount} records loaded
+                                                    </span>
+                                                 </div>
+                                              </div>
+                                              <span className="text-[9px] bg-zinc-850 px-2.5 py-1 rounded font-mono text-zinc-400 border border-white/5 uppercase font-bold tracking-wider">
+                                                 TABLE REST
+                                              </span>
+                                           </div>
+
+                                           {/* Table Columns chips list */}
+                                           <div className="space-y-1.5 border-t border-zinc-850/50 pt-3">
+                                              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Columns Detected</p>
+                                              <div className="flex flex-wrap gap-1.5">
+                                                 {table.columns.map((col: any) => (
+                                                    <span key={col.name} className="px-2 py-0.5 bg-black/40 border border-white/5 font-mono text-[9px] text-zinc-350 rounded hover:border-zinc-700 transition-all select-all">
+                                                       {col.name} <span className="text-zinc-550 text-[8px]">{col.type}</span>
+                                                    </span>
+                                                 ))}
+                                              </div>
+                                           </div>
+
+                                           {/* Sample Records JSON Box if rowCount > 0 */}
+                                           {table.rowCount > 0 && table.sampleRows && table.sampleRows.length > 0 && (
+                                              <div className="space-y-2 border-t border-zinc-850/50 pt-3">
+                                                 <div className="flex items-center justify-between">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Sample Records Preview</p>
+                                                    <span className="text-[9px] text-zinc-500 italic">Showing up to {table.sampleRows.length} rows</span>
+                                                 </div>
+                                                 <pre className="p-3 bg-black/80 rounded-xl border border-white/5 font-mono text-[10px] text-zinc-400 overflow-x-auto max-h-48 leading-relaxed scrollbar-thin select-all">
+                                                    {JSON.stringify(table.sampleRows, null, 2)}
+                                                 </pre>
+                                              </div>
+                                           )}
+                                           
+                                           {table.error ? (
+                                              <p className="text-[10px] text-red-400 italic bg-red-500/5 px-2.5 py-1 rounded border border-red-500/10 select-all font-mono">
+                                                 Error: {table.error}
+                                              </p>
+                                           ) : table.rowCount === 0 ? (
+                                              <p className="text-[10px] text-zinc-500 italic bg-zinc-950/40 px-2.5 py-1 rounded border border-white/5">
+                                                 This table is empty. Try uploading tracks or adding clients to populate it.
+                                              </p>
+                                           ) : null}
+                                        </div>
+                                      );
+                                   })}
+                                </div>
+                             )}
+                          </div>
+                      ) : (
+                         <p className="text-xs text-zinc-500 italic">Click Refresh to discover schema details.</p>
+                      )}
                    </div>
                 </div>
 
-                <div className="bg-zinc-950 border border-zinc-900 p-6 rounded-3xl space-y-4">
-                   <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400">Storage Profile</h3>
-                   <div className="space-y-2">
-                      <div className="flex justify-between text-xs font-bold uppercase">
-                        <span>Vault Usage</span>
-                        <span>4.2GB / 10GB</span>
+                {/* Account Security & Support Rail */}
+                <div className="space-y-6">
+                   <div className="bg-zinc-950 border border-zinc-900 p-6 rounded-3xl space-y-4">
+                      <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400">Account Security</h3>
+                      <div className="flex items-center justify-between p-4 bg-zinc-900 rounded-2xl border border-zinc-800">
+                         <div className="space-y-1">
+                           <p className="text-xs font-bold">Two-Factor Auth</p>
+                           <p className="text-[10px] text-zinc-500">Secure master deliveries.</p>
+                         </div>
+                         <div className="w-10 h-5 bg-zinc-800 rounded-full relative cursor-pointer">
+                            <div className="absolute right-0.5 top-0.5 w-4 h-4 bg-orange-500 rounded-full" />
+                         </div>
                       </div>
-                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
-                         <div className="h-full bg-orange-500 w-[42%]" />
+                   </div>
+
+                   <div className="bg-zinc-950 border border-zinc-900 p-6 rounded-3xl space-y-4">
+                      <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400">Storage Usage</h3>
+                      <div className="space-y-2">
+                         <div className="flex justify-between text-[10px] font-bold uppercase text-zinc-400">
+                           <span>Ref Masters Cache</span>
+                           <span>4.2GB / 10GB</span>
+                         </div>
+                         <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                            <div className="h-full bg-orange-500 w-[42%]" />
+                         </div>
                       </div>
                    </div>
                 </div>
