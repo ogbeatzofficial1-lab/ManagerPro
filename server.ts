@@ -9,26 +9,40 @@ import ws from "ws";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.RENDER === "true" && process.env.PORT
+  ? parseInt(process.env.PORT, 10)
+  : (process.env.PORT && process.env.NODE_ENV === "production" && !process.env.DISABLE_HMR
+      ? parseInt(process.env.PORT, 10)
+      : 3000);
 
 // Initialize Supabase for server-side diagnostics
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseAnonKey 
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false },
-      realtime: { transport: ws as any },
-    }) 
-  : null;
+let supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+let supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+
+if (!supabaseUrl || supabaseUrl === 'undefined') {
+  supabaseUrl = 'https://yqtkfpaauzpcwzaopzhl.supabase.co';
+}
+if (!supabaseAnonKey || supabaseAnonKey === 'undefined') {
+  supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxdGtmcGFhdXpwY3d6YW9wemhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MDY5ODIsImV4cCI6MjA5NDQ4Mjk4Mn0.9BSnEHydxyVuQjNaOY1O7JR2xZMQt5lmfuaJLuSYteg';
+}
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: { persistSession: false },
+  realtime: { transport: ws as any },
+});
 
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // API routes go here FIRST
 app.get("/api/config", (req, res) => {
+  let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || null;
+  let key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || null;
+  if (url === 'undefined') url = null;
+  if (key === 'undefined') key = null;
   res.json({
-    supabaseUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || null,
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || null
+    supabaseUrl: url,
+    supabaseAnonKey: key
   });
 });
 
