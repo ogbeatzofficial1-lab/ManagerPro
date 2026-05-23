@@ -132,44 +132,6 @@ BEGIN
     END IF;
 END $$;
 
--- Enable Realtime for tables (Safe check)
-DO $$
-BEGIN
-    -- This ensures the publication exists and adds tables to it
-    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-        CREATE PUBLICATION supabase_realtime;
-    END IF;
-    
-    -- Add tables to publication (idempotent via exception handling or separate checks is complex, simple ALTER is standard)
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE tracks;
-    EXCEPTION WHEN others THEN NULL; END;
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE playlists;
-    EXCEPTION WHEN others THEN NULL; END;
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE activities;
-    EXCEPTION WHEN others THEN NULL; END;
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE clients;
-    EXCEPTION WHEN others THEN NULL; END;
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-    EXCEPTION WHEN others THEN NULL; END;
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE share_links;
-    EXCEPTION WHEN others THEN NULL; END;
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE promo_videos;
-    EXCEPTION WHEN others THEN NULL; END;
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE profiles;
-    EXCEPTION WHEN others THEN NULL; END;
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE todos;
-    EXCEPTION WHEN others THEN NULL; END;
-END $$;
-
 -- Todos Table
 CREATE TABLE IF NOT EXISTS todos (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -178,17 +140,17 @@ CREATE TABLE IF NOT EXISTS todos (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable RLS
-ALTER TABLE tracks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE playlists ENABLE ROW LEVEL SECURITY;
-ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE share_links ENABLE ROW LEVEL SECURITY;
-ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE promo_videos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE promo_packs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE todos ENABLE ROW LEVEL SECURITY;
+-- Disable RLS (No security, completely public, all tables accessible)
+ALTER TABLE tracks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE playlists DISABLE ROW LEVEL SECURITY;
+ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE share_links DISABLE ROW LEVEL SECURITY;
+ALTER TABLE activities DISABLE ROW LEVEL SECURITY;
+ALTER TABLE messages DISABLE ROW LEVEL SECURITY;
+ALTER TABLE promo_videos DISABLE ROW LEVEL SECURITY;
+ALTER TABLE promo_packs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE todos DISABLE ROW LEVEL SECURITY;
 
 -- Public Policies (Using DO block to avoid 'already exists' errors)
 DO $$

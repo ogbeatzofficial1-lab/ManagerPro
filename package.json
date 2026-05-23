@@ -7,7 +7,7 @@
     "node": ">=18.0.0"
   },
   "overrides": {
-    "esbuild": "$esbuild"
+    "esbuild": "0.21.5"
   },
   "scripts": {
     "dev": "tsx watch server.ts",
