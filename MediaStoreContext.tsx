@@ -28,7 +28,7 @@ interface MediaStoreContextType {
   addActivity: (activity: Partial<Activity>) => Promise<void>;
   analyzeTrack: (name: string) => Promise<{ bpm: number, key: string, duration?: number }>;
   messages: Message[];
-  sendMessage: (clientId: string, content: string, image_url?: string | null) => Promise<void>;
+  sendMessage: (clientId: string, content: string, image_url?: string | null, direction?: 'inbound' | 'outbound') => Promise<void>;
   promoVideos: PromoVideo[];
   addPromoVideo: (video: Partial<PromoVideo>) => Promise<void>;
   deletePromoVideo: (id: string) => Promise<void>;
@@ -863,14 +863,14 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
     });
   };
 
-  const sendMessage = async (clientId: string, content: string, image_url?: string | null) => {
+  const sendMessage = async (clientId: string, content: string, image_url?: string | null, direction: 'inbound' | 'outbound' = 'outbound') => {
     const newMessage: Message = {
       id: uuidv4(),
       client_id: clientId,
       recipient_id: '',
       content,
       image_url: image_url || null,
-      direction: 'outbound',
+      direction: direction,
       timestamp: new Date().toISOString(),
       is_read: false
     };
@@ -880,7 +880,11 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
     setClients(prevClients => {
       const client = prevClients.find(c => c.id === clientId);
       if (client) {
-        newMessage.recipient_id = client.email;
+        if (direction === 'outbound') {
+          newMessage.recipient_id = client.email;
+        } else {
+          newMessage.recipient_id = 'producer@ogbeatz.com';
+        }
         clientName = client.name;
       }
       return prevClients;
@@ -902,8 +906,8 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
 
     addActivity({
       type: 'social',
-      user: 'OGBeatz',
-      action: `Sent message to ${clientName}`,
+      user: direction === 'inbound' ? clientName : 'OGBeatz',
+      action: direction === 'inbound' ? 'submitted feedback' : `Sent message to ${clientName}`,
       details: content,
       client_id: clientId
     });
@@ -954,7 +958,19 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
   };
 
   const getShareContent = async (token: string) => {
-    if (!supabase) return null;
+    if (!supabase) {
+      // Offline fallback lookup using local state arrays
+      const link = shareLinks.find(l => l.token === token);
+      if (!link) return null;
+      let track: Track | undefined;
+      let playlist: Playlist | undefined;
+      if (link.track_id) {
+        track = tracks.find(t => t.id === link.track_id);
+      } else if (link.playlist_id) {
+        playlist = playlists.find(p => p.id === link.playlist_id);
+      }
+      return { track, playlist, link };
+    }
 
     try {
       const { data: linkData, error: linkError } = await supabase
@@ -1082,6 +1098,30 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
 
   const analyzeTrack = async (name: string): Promise<{ bpm: number, key: string, duration?: number, tags?: string[] }> => {
     const cleanName = name.replace(/\.[^/.]+$/, ""); // Remove extension
+    const duration = 120 + (cleanName.length * 3) % 111;
+
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: name })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && typeof data.bpm === 'number' && typeof data.key === 'string' && Array.isArray(data.tags)) {
+          addToast("AI Analysis completed successfully via Gemini!", 'success');
+          return {
+            bpm: data.bpm,
+            key: data.key,
+            duration,
+            tags: data.tags
+          };
+        }
+      }
+    } catch (e: any) {
+      console.warn("Could not reach back-end analyzer, performing offline heuristic fallback:", e.message);
+    }
+
     const cleanLower = cleanName.toLowerCase();
 
     // 1. BPM Heuristic
@@ -1124,9 +1164,6 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
         break;
       }
     }
-
-    // 3. Duration Heuristic (between 130s and 230s based on title length)
-    const duration = 120 + (cleanName.length * 3) % 111;
 
     // 4. Tags Heuristic
     const tags: string[] = [];
