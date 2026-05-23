@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS promo_packs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Profiles Table
+-- profiles Table
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT,
@@ -123,6 +123,52 @@ CREATE TABLE IF NOT EXISTS profiles (
   social_links JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure created_at exists if table was created earlier
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='created_at') THEN
+        ALTER TABLE profiles ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
+
+-- Enable Realtime for tables (Safe check)
+DO $$
+BEGIN
+    -- This ensures the publication exists and adds tables to it
+    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        CREATE PUBLICATION supabase_realtime;
+    END IF;
+    
+    -- Add tables to publication (idempotent via exception handling or separate checks is complex, simple ALTER is standard)
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE tracks;
+    EXCEPTION WHEN others THEN NULL; END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE playlists;
+    EXCEPTION WHEN others THEN NULL; END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE activities;
+    EXCEPTION WHEN others THEN NULL; END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE clients;
+    EXCEPTION WHEN others THEN NULL; END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+    EXCEPTION WHEN others THEN NULL; END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE share_links;
+    EXCEPTION WHEN others THEN NULL; END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE promo_videos;
+    EXCEPTION WHEN others THEN NULL; END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE profiles;
+    EXCEPTION WHEN others THEN NULL; END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE todos;
+    EXCEPTION WHEN others THEN NULL; END;
+END $$;
 
 -- Todos Table
 CREATE TABLE IF NOT EXISTS todos (
