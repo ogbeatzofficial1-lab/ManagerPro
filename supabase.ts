@@ -20,18 +20,42 @@ let rawUrl = "";
 let rawKey = "";
 
 try {
-  // Vite replaces these with literal strings during build/dev compile-time.
-  // Node reads them natively on the backend.
-  rawUrl = (process.env.SUPABASE_URL as string) || "";
-  rawKey = (process.env.SUPABASE_ANON_KEY as string) || "";
+  // Try reading standard Vite client-side environment variables first (populated on build or dev server)
+  rawUrl = ((import.meta as any).env?.VITE_SUPABASE_URL as string) || ((import.meta as any).env?.SUPABASE_URL as string) || "";
+  rawKey = ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string) || ((import.meta as any).env?.SUPABASE_ANON_KEY as string) || "";
 } catch (e) {
   // Ignore env access errors
 }
 
-let supabaseUrl = cleanEnvValue(rawUrl);
-let supabaseAnonKey = cleanEnvValue(rawKey);
+// Fallback to process.env literal replacement.
+// We must NOT use optional chaining (process.env?.SUPABASE_URL) because Vite's define plugin 
+// strictly matches the exact string literal 'process.env.SUPABASE_URL'.
+if (!rawUrl) {
+  try {
+    rawUrl = (process.env.SUPABASE_URL as string) || "";
+  } catch (e) {}
+}
+if (!rawUrl && typeof process !== 'undefined' && process.env) {
+  try {
+    rawUrl = (process.env.VITE_SUPABASE_URL as string) || "";
+  } catch (e) {}
+}
 
-// Ensure fallback to current credential values
+if (!rawKey) {
+  try {
+    rawKey = (process.env.SUPABASE_ANON_KEY as string) || "";
+  } catch (e) {}
+}
+if (!rawKey && typeof process !== 'undefined' && process.env) {
+  try {
+    rawKey = (process.env.VITE_SUPABASE_ANON_KEY as string) || "";
+  } catch (e) {}
+}
+
+export let supabaseUrl = cleanEnvValue(rawUrl);
+export let supabaseAnonKey = cleanEnvValue(rawKey);
+
+// Fallback to active sandbox template if completely unconfigured
 if (!supabaseUrl) {
   supabaseUrl = 'https://yqtkfpaauzpcwzaopzhl.supabase.co';
 }
@@ -40,25 +64,13 @@ if (!supabaseAnonKey) {
 }
 
 // Export a reassignment-friendly client
-export let supabase = createClient(supabaseUrl, supabaseAnonKey);
+// --- PASTE THIS AT THE BOTTOM OF YOUR supabase.ts FILE ---
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function getSupabaseClient() {
-  if (typeof window !== 'undefined') {
-    try {
-      const res = await fetch('/api/config');
-      if (res.ok) {
-        const data = await res.json();
-        let fetchedUrl = cleanEnvValue(data.supabaseUrl);
-        let fetchedKey = cleanEnvValue(data.supabaseAnonKey);
-        
-        if (fetchedUrl && fetchedKey) {
-          supabase = createClient(fetchedUrl, fetchedKey);
-          return supabase;
-        }
-      }
-    } catch (err) {
-      console.warn("Could not load dynamic configuration, using static build-time credentials:", err);
-    }
+  if (!supabase) {
+    throw new Error("Supabase client failed to initialize. Check your URL and Key.");
   }
   return supabase;
 }
