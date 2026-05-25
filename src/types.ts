@@ -64,6 +64,8 @@ export interface Activity {
   details?: string;
   timestamp: string;
   client_id?: string;
+  track_id?: string;
+  playlist_id?: string;
 }
 
 export interface Message {

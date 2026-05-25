@@ -1,6 +1,6 @@
 # OG BEATZ — Database Schematic & Setup Manual
 
-This handbook details the complete PostgreSQL database schematic, table dictionary, security policies, and step-by-step onboarding guidelines designed for **OG BEATZ**. Use this model with **Supabase** or any **PostgreSQL** cloud server.
+This handbook details the Complete PostgreSQL database schematic, table dictionary, security policies, and step-by-step onboarding guidelines designed for **OG BEATZ**. Use this model with **Supabase** or any **PostgreSQL** cloud server.
 
 ---
 
@@ -94,7 +94,7 @@ Artists, legal managers, label executives, or reviewers authorized to stream and
 
 ---
 
-### E) `share_links`
+### D) `share_links`
 Secure link access tokens that resolve custom track lists or playlists for particular review clients.
 
 | Column | PG Type | Default | Constraints | Description |
@@ -112,7 +112,7 @@ Secure link access tokens that resolve custom track lists or playlists for parti
 
 ---
 
-### F) `activities`
+### E) `activities`
 Continuous system metric log recording client actions, streams, pings, and downloads.
 
 | Column | PG Type | Default | Constraints | Description |
@@ -130,7 +130,7 @@ Continuous system metric log recording client actions, streams, pings, and downl
 
 ---
 
-### G) `messages`
+### F) `messages`
 Review collaboration chat, serving comments, requests, and structural notes on track frames.
 
 | Column | PG Type | Default | Constraints | Description |
@@ -146,7 +146,7 @@ Review collaboration chat, serving comments, requests, and structural notes on t
 
 ---
 
-### H) `promo_videos`
+### G) `promo_videos`
 Social-media promotional files generated from catalog audio components.
 
 | Column | PG Type | Default | Constraints | Description |
@@ -164,7 +164,7 @@ Social-media promotional files generated from catalog audio components.
 
 ---
 
-### I) `promo_packs`
+### H) `promo_packs`
 AI-generated social-media copy templates and promotional hashtags for multi-channel posts.
 
 | Column | PG Type | Default | Constraints | Description |
@@ -178,7 +178,7 @@ AI-generated social-media copy templates and promotional hashtags for multi-chan
 
 ---
 
-### J) `profiles`
+### I) `profiles`
 The primary administration configuration storing producer credentials, billing info, and custom brand profiles.
 
 | Column | PG Type | Default | Constraints | Description |
@@ -194,7 +194,7 @@ The primary administration configuration storing producer credentials, billing i
 
 ---
 
-### K) `todos`
+### J) `todos`
 Interactive checklist, listing review task notes and studio engineering adjustments.
 
 | Column | PG Type | Default | Constraints | Description |
@@ -234,7 +234,7 @@ Configure this database on a live **Supabase** instance or standard **PostgreSQL
 3. Select **SQL Editor** on the left-hand navigation sidebar menu.
 
 ### Step 2: Paste and Execute Setup SQL
-1. Open the file [`/supabase_schema.sql`](./supabase_schema.sql) in this workspace.
+1. Open the file [`/schema.sql`](./schema.sql) in this workspace.
 2. Select and copy its entire contents.
 3. Paste the code into the Supabase SQL editor workspace.
 4. Click **Run** on the lower right to compile the tables, triggers, indexes, and full seed portfolios.

@@ -30,14 +30,25 @@ try {
 // Fallback to process.env literal replacement.
 // We must NOT use optional chaining (process.env?.SUPABASE_URL) because Vite's define plugin 
 // strictly matches the exact string literal 'process.env.SUPABASE_URL'.
-if (!rawUrl) {
+if (!rawUrl && typeof process !== 'undefined' && process.env) {
   try {
-    rawUrl = (process.env.SUPABASE_URL as string) || (process.env.VITE_SUPABASE_URL as string) || "";
+    rawUrl = (process.env.SUPABASE_URL as string) || "";
   } catch (e) {}
 }
-if (!rawKey) {
+if (!rawUrl && typeof process !== 'undefined' && process.env) {
   try {
-    rawKey = (process.env.SUPABASE_ANON_KEY as string) || (process.env.VITE_SUPABASE_ANON_KEY as string) || "";
+    rawUrl = (process.env.VITE_SUPABASE_URL as string) || "";
+  } catch (e) {}
+}
+
+if (!rawKey && typeof process !== 'undefined' && process.env) {
+  try {
+    rawKey = (process.env.SUPABASE_ANON_KEY as string) || "";
+  } catch (e) {}
+}
+if (!rawKey && typeof process !== 'undefined' && process.env) {
+  try {
+    rawKey = (process.env.VITE_SUPABASE_ANON_KEY as string) || "";
   } catch (e) {}
 }
 
@@ -46,23 +57,20 @@ export let supabaseAnonKey = cleanEnvValue(rawKey);
 
 // Fallback to active sandbox template if completely unconfigured
 if (!supabaseUrl) {
-  supabaseUrl = 'https://yqtkfpaauzpcwzaopzhl.supabase.co';
+  supabaseUrl = 'https://flpyrkjpgvazpdortrtn.supabase.co';
 }
 if (!supabaseAnonKey) {
-  supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxdGtmcGFhdXpwY3d6YW9wemhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MDY5ODIsImV4cCI6MjA5NDQ4Mjk4Mn0.9BSnEHydxyVuQjNaOY1O7JR2xZMQt5lmfuaJLuSYteg';
+  supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscHlya2pwZ3ZhenBkb3J0cnRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0NDEzMCwiZXhwIjoyMDk0MjIwMTMwfQ.lxtnlOykzyGUpV5S1Q1AOGVqOXlgpt3ZGq16TJTDkxY';
 }
 
 // Export a reassignment-friendly client
-export let supabase: any = null;
+// --- PASTE THIS AT THE BOTTOM OF YOUR supabase.ts FILE ---
 
-if (supabaseUrl) {
-  try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
-  } catch (err) {
-    console.warn("Failed to create Supabase client:", err);
-  }
-}
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function getSupabaseClient() {
+  if (!supabase) {
+    throw new Error("Supabase client failed to initialize. Check your URL and Key.");
+  }
   return supabase;
 }

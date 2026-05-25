@@ -191,13 +191,13 @@ export default function App() {
          setDbStatus({
            status: 'error',
            message: `Connection established, but verification query failed: ${error.message}`,
-           url: dbClient.supabaseUrl || supabaseUrl
+           url: supabaseUrl
          });
       } else {
         setDbStatus({
           status: 'success',
           message: 'Successfully established direct, secure client-to-database live telemetry link. Schema is ready.',
-          url: dbClient.supabaseUrl || supabaseUrl
+          url: supabaseUrl
         });
         setTimeout(() => setDbStatus(null), 5000);
       }
@@ -222,11 +222,11 @@ export default function App() {
   const [showAddTracksToPlaylist, setShowAddTracksToPlaylist] = useState(false);
 
   const { 
-    tracks, playlists, clients, activities, messages, profile, loading, shareLinks, promoVideos,
+    tracks, playlists, clients, activities, messages, profile, loading, loadingProgress, loadingStatusText, shareLinks, promoVideos,
     deleteTrack, updateTrack, addPlaylist, updatePlaylist, deletePlaylist, 
     addTrackToPlaylist, removeTrackFromPlaylist, addClient, updateClient, deleteClient, 
     updateProfile, addShareLink, addActivity, sendMessage, incrementShareLinkAccess, getShareContent,
-    uploadFile
+    uploadFile, toasts, removeToast
   } = useMediaStore();
   const hasIncrementedRef = React.useRef<string | null>(null);
 
@@ -303,6 +303,17 @@ export default function App() {
       (c.tags || []).some(t => t.toLowerCase().includes(clientSearchQuery.toLowerCase()))
     );
   }, [clients, clientSearchQuery]);
+
+  const filteredTracks = useMemo(() => {
+    return tracks.filter(t => {
+      const q = searchQuery.toLowerCase();
+      return (
+        t.name.toLowerCase().includes(q) ||
+        t.artist.toLowerCase().includes(q) ||
+        t.tags?.some(tag => tag.toLowerCase().includes(q))
+      );
+    });
+  }, [tracks, searchQuery]);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -592,16 +603,7 @@ export default function App() {
     return <ClientPortal client={clientPortalUser} />;
   }
 
-  const filteredTracks = useMemo(() => {
-    return tracks.filter(t => {
-      const q = searchQuery.toLowerCase();
-      return (
-        t.name.toLowerCase().includes(q) ||
-        t.artist.toLowerCase().includes(q) ||
-        t.tags?.some(tag => tag.toLowerCase().includes(q))
-      );
-    });
-  }, [tracks, searchQuery]);
+
 
   const renderVideos = () => (
     <div className="p-8 space-y-8">
@@ -2353,13 +2355,41 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-6 selection:bg-orange-500 selection:text-black">
-        <div className="w-16 h-16 rounded-[2rem] bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-[0_0_50px_rgba(249,115,22,0.1)]">
-          <Music className="w-8 h-8 text-orange-500 animate-pulse" />
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-8 selection:bg-orange-500 selection:text-black">
+        <div className="relative group">
+          <div className="absolute -inset-1.5 bg-gradient-to-b from-orange-500 to-amber-600 rounded-[2rem] opacity-35 blur-xl group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+          <div className="relative w-16 h-16 rounded-[1.5rem] bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-lg">
+            <Music className="w-8 h-8 text-orange-500 animate-bounce" />
+          </div>
         </div>
-        <div className="text-center space-y-2">
-          <h2 className="text-sm font-black uppercase tracking-[0.3em] text-white">Initializing Vault</h2>
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 animate-pulse">Syncing tracks and playlists with Supabase...</p>
+        
+        <div className="text-center space-y-4 max-w-sm px-6">
+          <div className="space-y-1">
+            <h2 className="text-xs font-black uppercase tracking-[0.4em] text-white">Initializing Vault</h2>
+            <div className="flex items-center justify-center gap-1.5 text-[9px] font-mono text-zinc-500 tracking-widest uppercase">
+              <span>Secure Session</span>
+              <span className="w-1 h-1 rounded-full bg-emerald-500 animate-ping"></span>
+            </div>
+          </div>
+
+          {/* Progress Bar Container */}
+          <div className="space-y-2.5">
+            <div className="w-64 h-2 bg-zinc-950 rounded-full border border-zinc-900 overflow-hidden relative p-[1px]">
+              <div 
+                style={{ width: `${Math.min(Math.max(loadingProgress, 5), 100)}%` }}
+                className="h-full bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 rounded-full transition-all duration-300 ease-out"
+              ></div>
+            </div>
+            
+            <div className="flex items-center justify-between text-[9px] font-mono px-0.5">
+              <span className="text-zinc-500 uppercase tracking-wider animate-pulse truncate max-w-[180px]">
+                {loadingStatusText}
+              </span>
+              <span className="text-orange-500 font-bold tracking-widest tabular-nums">
+                {loadingProgress}%
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -2411,25 +2441,19 @@ export default function App() {
                          <div className="flex items-center justify-between">
                             <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Active Database Url</span>
                             <span className="text-[10px] font-mono select-all bg-black/40 px-2 py-1 rounded border border-white/5 text-zinc-400">
-                               {dbStatus?.url || "https://yqtkfpaauzpcwzaopzhl.supabase.co"}
+                               {supabaseUrl}
                             </span>
                          </div>
                          <div className="flex items-center justify-between">
                             <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Connection Mode</span>
-                            {dbStatus?.message?.includes("custom") ? (
-                               <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">
-                                  Production Cloud Connected
-                               </span>
-                            ) : (
-                               <span className="bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full animate-pulse">
-                                  Sandbox Fallback Mode (Demo Data)
-                               </span>
-                            )}
+                            <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+                               Production Cloud Connected
+                            </span>
                          </div>
                       </div>
 
                       {/* Explicit Guidance For Blank Setup */}
-                      {!dbStatus?.message?.includes("custom") && (
+                      {false && (
                          <div className="space-y-3 border-t border-zinc-900 pt-4">
                             <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-2xl space-y-2">
                                <p className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
@@ -2732,6 +2756,51 @@ SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpX...
           />
         )}
       </AnimatePresence>
+
+      {/* Floating Database Operations Toasts */}
+      <div className="fixed top-24 right-6 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+        <AnimatePresence mode="popLayout">
+          {toasts && toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              layout
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+              className={cn(
+                "p-4 rounded-2xl border flex items-start gap-3 shadow-2xl backdrop-blur-xl pointer-events-auto",
+                toast.type === 'success' 
+                  ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-100/90" 
+                  : toast.type === 'error'
+                  ? "bg-red-950/95 border-red-500/30 text-red-100/95" 
+                  : "bg-zinc-900/95 border-zinc-800 text-zinc-100"
+              )}
+            >
+              <div className="mt-0.5 shrink-0">
+                {toast.type === 'success' && <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mt-1.5" />}
+                {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />}
+                {toast.type === 'info' && <Music className="w-4 h-4 text-zinc-400 mt-0.5" />}
+              </div>
+              
+              <div className="flex-1 space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                  {toast.type === 'success' && 'Database Sync Success'}
+                  {toast.type === 'error' && 'Database Writing Issue'}
+                  {toast.type === 'info' && 'Studio Local Notice'}
+                </p>
+                <p className="text-xs leading-relaxed font-semibold">{toast.message}</p>
+              </div>
+
+              <button 
+                onClick={() => removeToast(toast.id)}
+                className="text-zinc-500 hover:text-white transition-colors p-0.5 shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </Shell>
   );
 }

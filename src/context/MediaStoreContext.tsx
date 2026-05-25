@@ -10,6 +10,8 @@ interface MediaStoreContextType {
   activities: Activity[];
   profile: UserProfile | null;
   loading: boolean;
+  loadingProgress: number;
+  loadingStatusText: string;
   addTrack: (track: Partial<Track>) => Promise<Track>;
   updateTrack: (id: string, updates: Partial<Track>) => Promise<void>;
   deleteTrack: (id: string) => Promise<void>;
@@ -28,7 +30,7 @@ interface MediaStoreContextType {
   addActivity: (activity: Partial<Activity>) => Promise<void>;
   analyzeTrack: (name: string) => Promise<{ bpm: number, key: string, duration?: number }>;
   messages: Message[];
-  sendMessage: (clientId: string, content: string, image_url?: string | null) => Promise<void>;
+  sendMessage: (clientId: string, content: string, image_url?: string | null, direction?: 'inbound' | 'outbound') => Promise<void>;
   promoVideos: PromoVideo[];
   addPromoVideo: (video: Partial<PromoVideo>) => Promise<void>;
   deletePromoVideo: (id: string) => Promise<void>;
@@ -40,9 +42,30 @@ interface MediaStoreContextType {
   connected: boolean;
 }
 
+const UUID_TRACK_1 = "11111111-1111-1111-1111-111111111111";
+const UUID_TRACK_2 = "22222222-2222-2222-2222-222222222222";
+const UUID_TRACK_3 = "33333333-3333-3333-3333-333333333333";
+const UUID_TRACK_4 = "44444444-4444-4444-4444-444444444444";
+
+const UUID_PLAYLIST_1 = "55555555-5555-5555-5555-555555555555";
+const UUID_PLAYLIST_2 = "66666666-6666-6666-6666-666666666666";
+
+const UUID_CLIENT_1 = "77777777-7777-7777-7777-777777777777";
+const UUID_CLIENT_2 = "88888888-8888-8888-8888-888888888888";
+
+const UUID_MSG_1 = "99999999-9999-9999-9999-999999999991";
+const UUID_MSG_2 = "99999999-9999-9999-9999-999999999992";
+const UUID_MSG_3 = "99999999-9999-9999-9999-999999999993";
+
+const UUID_ACT_1 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1";
+const UUID_ACT_2 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2";
+const UUID_ACT_3 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3";
+
+const UUID_PROFILE = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
 const MOCK_TRACKS: Track[] = [
   {
-    id: "track-1",
+    id: UUID_TRACK_1,
     name: "Tokyo Drift Vibe",
     artist: "OG BEATZ",
     bpm: 140,
@@ -59,7 +82,7 @@ const MOCK_TRACKS: Track[] = [
     created_at: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString()
   },
   {
-    id: "track-2",
+    id: UUID_TRACK_2,
     name: "Midnight Coffee",
     artist: "OG BEATZ",
     bpm: 85,
@@ -76,7 +99,7 @@ const MOCK_TRACKS: Track[] = [
     created_at: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()
   },
   {
-    id: "track-3",
+    id: UUID_TRACK_3,
     name: "Chrome Plated",
     artist: "OG BEATZ",
     bpm: 142,
@@ -93,7 +116,7 @@ const MOCK_TRACKS: Track[] = [
     created_at: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString()
   },
   {
-    id: "track-4",
+    id: UUID_TRACK_4,
     name: "Acoustic Sunset",
     artist: "OG BEATZ",
     bpm: 112,
@@ -113,21 +136,21 @@ const MOCK_TRACKS: Track[] = [
 
 const MOCK_PLAYLISTS: Playlist[] = [
   {
-    id: "playlist-1",
+    id: UUID_PLAYLIST_1,
     name: "Unreleased Master Vol. 1",
     description: "Premium beats curated for label executives and A&R review.",
     image_url: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=300&auto=format&fit=crop",
-    track_ids: ["track-1", "track-3"],
+    track_ids: [UUID_TRACK_1, UUID_TRACK_3],
     start_color: "#f97316",
     end_color: "#ea580c",
     created_at: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()
   },
   {
-    id: "playlist-2",
+    id: UUID_PLAYLIST_2,
     name: "Late Night Chill Sessions",
     description: "Lofi and acoustic beats perfect for songwriting and mood setting.",
     image_url: "https://images.unsplash.com/photo-1516280440614-37939bbacd6a?q=80&w=300&auto=format&fit=crop",
-    track_ids: ["track-2", "track-4"],
+    track_ids: [UUID_TRACK_2, UUID_TRACK_4],
     start_color: "#8b5cf6",
     end_color: "#6d28d9",
     created_at: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()
@@ -136,7 +159,7 @@ const MOCK_PLAYLISTS: Playlist[] = [
 
 const MOCK_CLIENTS: Client[] = [
   {
-    id: "client-1",
+    id: UUID_CLIENT_1,
     name: "Marcus Cole",
     email: "marcus@epicrecords.com",
     status: "online",
@@ -146,7 +169,7 @@ const MOCK_CLIENTS: Client[] = [
     created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()
   },
   {
-    id: "client-2",
+    id: UUID_CLIENT_2,
     name: "Sarah Jenkins",
     email: "sarah@independent.io",
     status: "offline",
@@ -159,8 +182,8 @@ const MOCK_CLIENTS: Client[] = [
 
 const MOCK_MESSAGES: Message[] = [
   {
-    id: "msg-1",
-    client_id: "client-1",
+    id: UUID_MSG_1,
+    client_id: UUID_CLIENT_1,
     recipient_id: "producer@ogbeatz.com",
     content: "Yo! Just listened to 'Tokyo Drift Vibe'. This is perfect for the new album project. Can we discuss licensing?",
     direction: "inbound",
@@ -168,8 +191,8 @@ const MOCK_MESSAGES: Message[] = [
     is_read: false
   },
   {
-    id: "msg-2",
-    client_id: "client-1",
+    id: UUID_MSG_2,
+    client_id: UUID_CLIENT_1,
     recipient_id: "marcus@epicrecords.com",
     content: "Let me know when you are free for a call. I need the track stems draft as well.",
     direction: "inbound",
@@ -177,8 +200,8 @@ const MOCK_MESSAGES: Message[] = [
     is_read: false
   },
   {
-    id: "msg-3",
-    client_id: "client-2",
+    id: UUID_MSG_3,
+    client_id: UUID_CLIENT_2,
     recipient_id: "producer@ogbeatz.com",
     content: "Hey, the 'Late Night' beats packet is beautiful! Working on some vocal melodies tonight.",
     direction: "inbound",
@@ -189,35 +212,40 @@ const MOCK_MESSAGES: Message[] = [
 
 const MOCK_ACTIVITIES: Activity[] = [
   {
-    id: "act-1",
+    id: UUID_ACT_1,
     type: "play",
     user: "Marcus Cole",
     action: "listened to",
     target: "Tokyo Drift Vibe",
     details: "Played 100% of track",
+    track_id: UUID_TRACK_1,
+    client_id: UUID_CLIENT_1,
     timestamp: new Date(Date.now() - 2 * 3600 * 1000).toISOString()
   },
   {
-    id: "act-2",
+    id: UUID_ACT_2,
     type: "download",
     user: "Sarah Jenkins",
     action: "downloaded",
     target: "Midnight Coffee",
     details: "Standard WAV license",
+    track_id: UUID_TRACK_2,
+    client_id: UUID_CLIENT_2,
     timestamp: new Date(Date.now() - 5 * 3600 * 1000).toISOString()
   },
   {
-    id: "act-3",
+    id: UUID_ACT_3,
     type: "share",
     user: "OG BEATZ",
     action: "generated links for",
     target: "Unreleased Master Vol. 1",
+    playlist_id: UUID_PLAYLIST_1,
     timestamp: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString()
   }
 ];
 
 const MOCK_PROFILE: UserProfile = {
-  id: "producer-1",
+  id: UUID_PROFILE,
   name: "OG BEATZ",
   artist_name: "OG BEATZ",
   email: "producer@ogbeatz.com",
@@ -326,6 +354,8 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
   });
 
   const [loading, setLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingStatusText, setLoadingStatusText] = useState("Establishing vault node handshakes...");
   const [supabase, setSupabase] = useState<any>(null);
   const [connected, setConnected] = useState(false);
   const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' }[]>([]);
@@ -365,116 +395,337 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     async function init() {
       try {
-        // Run getSupabaseClient with an automatic connection timeout of 15 seconds
-        const activeSupabase = await Promise.race([
-          getSupabaseClient(),
-          new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Supabase connection timeout")), 15000))
-        ]).catch(err => {
-          console.warn("Supabase initialization timed out; utilizing offline schema fallback:", err);
+        setLoadingProgress(10);
+        setLoadingStatusText("Establishing vault node handshakes...");
+        // Retrieve Supabase client. It is configured synchronously, so we get it immediately.
+        let activeSupabase = await getSupabaseClient().catch(err => {
+          console.warn("Supabase client failed to resolve: utilizing offline fallback model:", err);
           return null;
         });
+
+        let isDbConnected = false;
+        if (activeSupabase) {
+          try {
+            setLoadingStatusText("Probing cloud link...");
+            const coldStartTimer = setTimeout(() => {
+              setLoadingStatusText("Waking up cold database (takes 10-25s)...");
+              setLoadingProgress(15);
+            }, 3000);
+
+            // Robust probe check with a 25000ms timeout to detect pause/sleep/dns blockage and allow wake-ups
+            await Promise.race([
+              activeSupabase.from('profiles').select('id').limit(1),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Database connection probe timed out")), 25000))
+            ]);
+            clearTimeout(coldStartTimer);
+            isDbConnected = true;
+          } catch (probeErr: any) {
+            console.warn("[Supabase Connection Probe] Cloud failed to respond or refused connection within 25 seconds. Switching to offline-safe cache model:", probeErr);
+            isDbConnected = false;
+            activeSupabase = null;
+          }
+        }
 
         if (activeSupabase) {
           setSupabase(activeSupabase);
           setConnected(true);
+          setLoadingProgress(20);
+          setLoadingStatusText("Secure handshake established. Syncing databases...");
           try {
-            const fetchSafely = async (table: string) => {
-              // Wrap fetch queries with a loose 15-second timeout to handle cold starts and sleep states gracefully
-              return Promise.race([
-                activeSupabase.from(table).select('*'),
-                new Promise<any>((_, reject) => setTimeout(() => reject(new Error(`Fetch timed out for table ${table}`)), 15000))
-              ]).then(({ data, error }) => {
-                if (error) {
-                  console.warn(`Error fetching ${table}:`, error);
+            // Robust retry helper with exponential backoff to handle cold wake-ups and statement timeouts gracefully
+            const fetchWithRetry = async (table: string, retries = 2, delayMs = 1000): Promise<any[] | null> => {
+              for (let attempt = 1; attempt <= retries; attempt++) {
+                try {
+                  console.log(`[Supabase Sync] Fetching "${table}" (Attempt ${attempt}/${retries})...`);
+                  const { data, error } = await Promise.race([
+                    activeSupabase.from(table).select('*'),
+                    new Promise<any>((_, reject) => setTimeout(() => reject(new Error(`Fetch timed out for table ${table}`)), 15000))
+                  ]);
+                  
+                  if (error) {
+                    console.warn(`[Supabase Sync] Attempt ${attempt} encountered error for "${table}":`, error);
+                    // 42P01: Relation/Table does not exist (requires user migrations/seeding)
+                    // 42501: RLS policy blocking access or permission denied (cannot access via Anon key)
+                    if (error.code === '42P01' || error.code === '42501') {
+                      console.log(`[Supabase Sync] Non-retryable error (${error.code}) for "${table}". Skipping retries and using offline-first data fallback.`);
+                      return null;
+                    }
+                    if (attempt < retries) {
+                      // Exponential backoff with random jitter to allow DB instance load to steady
+                      const backoff = delayMs * Math.pow(2, attempt - 1) + Math.random() * 400;
+                      console.log(`[Supabase Sync] Retrying "${table}" in ${Math.round(backoff)}ms due to timeout/error...`);
+                      await new Promise(resolve => setTimeout(resolve, backoff));
+                      continue;
+                    }
+                    return null;
+                  }
+                  
+                  console.log(`[Supabase Sync] Successfully retrieved ${data?.length || 0} rows from "${table}".`);
+                  return data;
+                } catch (err) {
+                  console.error(`[Supabase Sync] Attempt ${attempt} caught exception for "${table}":`, err);
+                  if (attempt < retries) {
+                    const backoff = delayMs * Math.pow(2, attempt - 1) + Math.random() * 400;
+                    await new Promise(resolve => setTimeout(resolve, backoff));
+                    continue;
+                  }
                   return null;
                 }
-                return data;
-              }).catch(err => {
-                console.warn(`Fetch timed out or failed for ${table}:`, err);
-                return null;
-              });
+              }
+              return null;
             };
 
-            // Initiate parallel fetches and let each table set state individually when ready
-            // This is completely non-blocking and prevents slow tables from holding up others
-            const fetchPromises = [
-              fetchSafely('tracks').then(val => { if (val) setTracks(val); }),
-              fetchSafely('playlists').then(val => { if (val) setPlaylists(val); }),
-              fetchSafely('clients').then(val => { if (val) setClients(val); }),
-              fetchSafely('share_links').then(val => { if (val) setShareLinks(val); }),
-              fetchSafely('activities').then(val => { if (val) setActivities(val); }),
-              fetchSafely('messages').then(val => { if (val) setMessages(val); }),
-              fetchSafely('promo_videos').then(val => { if (val) setPromoVideos(val); })
-            ];
+            let settledCount = 0;
+            const totalTasks = 8;
+            const updateProgress = (tableName: string) => {
+              settledCount++;
+              const pct = 20 + Math.round((settledCount / totalTasks) * 80);
+              setLoadingProgress(pct);
+              setLoadingStatusText(`Synchronized: "${tableName}" schema`);
+            };
 
-            await Promise.allSettled(fetchPromises);
-            
-            let profData = null;
-            const { data: existingProf, error: profError } = await Promise.race([
-              activeSupabase.from('profiles').select('*').single(),
-              new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Profile fetch timeout')), 15000))
-            ]).catch(err => {
-              console.warn("Profile fetch timed out:", err);
-              return { data: null, error: err };
-            });
-
-            if (profError && profError.code !== 'PGRST116') {
-              console.warn("Profile fetch error:", profError);
-            }
-            
-            if (existingProf) {
-              profData = existingProf;
-            } else if (!existingProf && (profError?.code === 'PGRST116' || !profError)) {
-              // No profile row in the DB: create a starting master producer profile
-              const defaultProf: UserProfile = {
-                id: uuidv4(),
-                name: "OG BEATZ",
-                artist_name: "OG BEATZ",
-                bio: "Master Recording Engineer, Multi-Platinum Producer, & Architect of OG BEATZ vault.",
-                email: "producer@ogbeatz.com",
-                avatar_url: "https://images.unsplash.com/photo-1614680376593-902f74fa0d41?q=80&w=300&auto=format&fit=crop",
-                social_links: {
-                  instagram: "ogbeatz_prod",
-                  spotify: "ogbeatz",
-                  twitter: "ogbeatz"
+            const initTracks = async () => {
+              try {
+                const data = await fetchWithRetry('tracks');
+                if (data && data.length > 0) {
+                  setTracks(data);
+                } else {
+                  console.log("Seeding tracks table in Supabase or utilizing fallback...");
+                  if (data && data.length === 0) {
+                    await activeSupabase.from('tracks').insert(MOCK_TRACKS).catch(() => {});
+                  }
+                  setTracks(MOCK_TRACKS);
                 }
-              };
-              const { error: insertError } = await Promise.race([
-                activeSupabase.from('profiles').insert(defaultProf),
-                new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Profile creation timeout')), 15000))
-              ]).catch(err => {
-                console.warn("Profile creation timed out:", err);
-                return { error: err };
-              });
+              } catch (err) {
+                console.error("tracks init failed:", err);
+                setTracks(MOCK_TRACKS);
+              } finally {
+                updateProgress("tracks");
+              }
+            };
 
-              if (!insertError) {
-                profData = defaultProf;
-              } else {
-                console.error("Error creating default profile in Supabase:", insertError);
+            const initPlaylists = async () => {
+              try {
+                const data = await fetchWithRetry('playlists');
+                if (data && data.length > 0) {
+                  setPlaylists(data);
+                } else {
+                  console.log("Seeding playlists table in Supabase or utilizing fallback...");
+                  if (data && data.length === 0) {
+                    await activeSupabase.from('playlists').insert(MOCK_PLAYLISTS).catch(() => {});
+                  }
+                  setPlaylists(MOCK_PLAYLISTS);
+                }
+              } catch (err) {
+                console.error("playlists init failed:", err);
+                setPlaylists(MOCK_PLAYLISTS);
+              } finally {
+                updateProgress("playlists");
               }
-            }
-            
-            setProfile(profData || profile || {
-              id: "default-id",
-              name: "OG BEATZ",
-              artist_name: "OG BEATZ",
-              bio: "Master Recording Engineer, Multi-Platinum Producer, & Architect of OG BEATZ vault.",
-              email: "producer@ogbeatz.com",
-              avatar_url: "https://images.unsplash.com/photo-1614680376593-902f74fa0d41?q=80&w=300&auto=format&fit=crop",
-              social_links: {
-                instagram: "ogbeatz_prod",
-                spotify: "ogbeatz",
-                twitter: "ogbeatz"
+            };
+
+            const initClients = async () => {
+              try {
+                 const data = await fetchWithRetry('clients');
+                if (data && data.length > 0) {
+                  setClients(data);
+                } else {
+                  console.log("Seeding clients table in Supabase or utilizing fallback...");
+                  if (data && data.length === 0) {
+                    await activeSupabase.from('clients').insert(MOCK_CLIENTS).catch(() => {});
+                  }
+                  setClients(MOCK_CLIENTS);
+                }
+              } catch (err) {
+                console.error("clients init failed:", err);
+                setClients(MOCK_CLIENTS);
+              } finally {
+                updateProgress("clients");
               }
-            });
+            };
+
+            const initShareLinks = async () => {
+              try {
+                const data = await fetchWithRetry('share_links');
+                if (data) {
+                  setShareLinks(data);
+                } else {
+                  console.warn("share_links table fetch returned null. Utilizing empty fallback.");
+                  setShareLinks([]);
+                }
+              } catch (err) {
+                console.error("share_links init failed:", err);
+                setShareLinks([]);
+              } finally {
+                updateProgress("share_links");
+              }
+            };
+
+            const initActivities = async () => {
+              try {
+                const data = await fetchWithRetry('activities');
+                if (data && data.length > 0) {
+                  setActivities(data);
+                } else {
+                  if (data && data.length === 0) {
+                    await activeSupabase.from('activities').insert(MOCK_ACTIVITIES).catch(() => {});
+                  }
+                  setActivities(MOCK_ACTIVITIES);
+                }
+              } catch (err) {
+                console.error("activities init failed:", err);
+                setActivities(MOCK_ACTIVITIES);
+              } finally {
+                updateProgress("activities");
+              }
+            };
+
+            const initMessages = async () => {
+              try {
+                const data = await fetchWithRetry('messages');
+                if (data && data.length > 0) {
+                  setMessages(data);
+                } else {
+                  if (data && data.length === 0) {
+                    await activeSupabase.from('messages').insert(MOCK_MESSAGES).catch(() => {});
+                  }
+                  setMessages(MOCK_MESSAGES);
+                }
+              } catch (err) {
+                console.error("messages init failed:", err);
+                setMessages(MOCK_MESSAGES);
+              } finally {
+                updateProgress("messages");
+              }
+            };
+
+            const initPromoVideos = async () => {
+              try {
+                const data = await fetchWithRetry('promo_videos');
+                if (data) {
+                  setPromoVideos(data);
+                } else {
+                  console.warn("promo_videos table fetch returned null. Utilizing empty fallback.");
+                  setPromoVideos([]);
+                }
+              } catch (err) {
+                console.error("promo_videos init failed:", err);
+                setPromoVideos([]);
+              } finally {
+                updateProgress("promo_videos");
+              }
+            };
+
+            const initProfile = async () => {
+              try {
+                let fetchedProfileResult: any = null;
+                for (let att = 1; att <= 2; att++) {
+                  try {
+                    const { data, error } = await Promise.race([
+                      activeSupabase.from('profiles').select('*').single(),
+                      new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Profile fetch timeout')), 15000))
+                    ]);
+                    if (error && error.code !== 'PGRST116') {
+                      console.warn(`[Profile Sync] Attempt ${att} error:`, error);
+                      if (att < 2) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * att));
+                        continue;
+                      }
+                    }
+                    fetchedProfileResult = { data, error };
+                    break;
+                  } catch (e) {
+                    console.error(`[Profile Sync] Exception ${att}:`, e);
+                    if (att < 2) {
+                      await new Promise(resolve => setTimeout(resolve, 1000 * att));
+                      continue;
+                    }
+                  }
+                }
+
+                const existingProf = fetchedProfileResult?.data;
+                const profError = fetchedProfileResult?.error;
+                let profData = null;
+
+                if (existingProf) {
+                  profData = existingProf;
+                } else if (!existingProf && (profError?.code === 'PGRST116' || !profError)) {
+                  // No profile row in the DB: create a starting master producer profile
+                  const defaultProf: UserProfile = {
+                    id: uuidv4(),
+                    name: "OG BEATZ",
+                    artist_name: "OG BEATZ",
+                    bio: "Master Recording Engineer, Multi-Platinum Producer, & Architect of OG BEATZ vault.",
+                    email: "producer@ogbeatz.com",
+                    avatar_url: "https://images.unsplash.com/photo-1614680376593-902f74fa0d41?q=80&w=300&auto=format&fit=crop",
+                    social_links: {
+                      instagram: "ogbeatz_prod",
+                      spotify: "ogbeatz",
+                      twitter: "ogbeatz"
+                    }
+                  };
+
+                  console.log("[Profile Sync] Creating default producer profile in Supabase...");
+                  const { error: insertError } = await Promise.race([
+                    activeSupabase.from('profiles').insert(defaultProf),
+                    new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Profile insert timeout')), 15000))
+                  ]).catch(e => {
+                    console.warn("[Profile Sync] Profile insert timed out / failed:", e);
+                    return { error: e };
+                  });
+
+                  if (!insertError) {
+                    profData = defaultProf;
+                  } else {
+                    console.error("Error creating default profile in Supabase:", insertError);
+                  }
+                }
+
+                setProfile(profData || profile || {
+                  id: "default-id",
+                  name: "OG BEATZ",
+                  artist_name: "OG BEATZ",
+                  bio: "Master Recording Engineer, Multi-Platinum Producer, & Architect of OG BEATZ vault.",
+                  email: "producer@ogbeatz.com",
+                  avatar_url: "https://images.unsplash.com/photo-1614680376593-902f74fa0d41?q=80&w=300&auto=format&fit=crop",
+                  social_links: {
+                    instagram: "ogbeatz_prod",
+                    spotify: "ogbeatz",
+                    twitter: "ogbeatz"
+                  }
+                });
+
+              } catch (err) {
+                console.error("profiles init failed:", err);
+              } finally {
+                updateProgress("profiles");
+              }
+            };
+
+            await Promise.allSettled([
+              initTracks(),
+              initPlaylists(),
+              initClients(),
+              initShareLinks(),
+              initActivities(),
+              initMessages(),
+              initPromoVideos(),
+              initProfile()
+            ]);
 
           } catch (e) {
             console.error("Supabase load error:", e);
           }
+        } else {
+          setLoadingProgress(100);
+          setLoadingStatusText("Local Fallback Mode active.");
         }
       } catch (err) {
         console.error("Error during MediaStore init:", err);
       } finally {
+        setLoadingProgress(100);
+        setLoadingStatusText("Sync is complete...");
+        await new Promise(resolve => setTimeout(resolve, 800));
         setLoading(false);
       }
     }
@@ -482,12 +733,14 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
     init();
   }, []);
   const addTrack = async (track: Partial<Track>) => {
+    // Round floats (e.g. from audio element metadata loading) to integers to satisfy postgres integer constraint on duration and bpm
+    const rawDuration = typeof track.duration === 'number' ? Math.round(track.duration) : (track.duration ? Math.round(parseFloat(track.duration as any)) : 0);
+    const rawBpm = typeof track.bpm === 'number' ? Math.round(track.bpm) : (track.bpm ? Math.round(parseFloat(track.bpm as any)) : 120);
+
     const newTrack: Track = {
       id: uuidv4(),
       name: track.name || "Untitled",
       artist: track.artist || "OGBeatz",
-      duration: track.duration || 0,
-      bpm: track.bpm || 120,
       key_signature: track.key_signature || "C",
       tags: track.tags || [],
       file_url: track.file_url || null,
@@ -498,7 +751,9 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
       likes: 0,
       status: "ready",
       created_at: new Date().toISOString(),
-      ...track
+      ...track,
+      duration: isNaN(rawDuration) ? 0 : rawDuration, // guarantee integer structure
+      bpm: isNaN(rawBpm) ? 120 : rawBpm // guarantee integer structure
     };
 
     setTracks(prev => [newTrack, ...prev]);
@@ -530,10 +785,25 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
   };
 
   const updateTrack = async (id: string, updates: Partial<Track>) => {
-    setTracks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    const cleanUpdates = { ...updates };
+    if (typeof cleanUpdates.duration === 'number') {
+      cleanUpdates.duration = Math.round(cleanUpdates.duration);
+    } else if (cleanUpdates.duration) {
+      const parsed = Math.round(parseFloat(cleanUpdates.duration as any));
+      cleanUpdates.duration = isNaN(parsed) ? undefined : parsed;
+    }
+
+    if (typeof cleanUpdates.bpm === 'number') {
+      cleanUpdates.bpm = Math.round(cleanUpdates.bpm);
+    } else if (cleanUpdates.bpm) {
+      const parsed = Math.round(parseFloat(cleanUpdates.bpm as any));
+      cleanUpdates.bpm = isNaN(parsed) ? undefined : parsed;
+    }
+
+    setTracks(prev => prev.map(t => t.id === id ? { ...t, ...cleanUpdates } : t));
     
     if (supabase) {
-      const dbUpdates = { ...updates } as any;
+      const dbUpdates = { ...cleanUpdates } as any;
       delete dbUpdates.file_data;
       delete dbUpdates.image_data;
       const { error } = await supabase.from('tracks').update(dbUpdates).eq('id', id);
@@ -776,14 +1046,14 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
     });
   };
 
-  const sendMessage = async (clientId: string, content: string, image_url?: string | null) => {
+  const sendMessage = async (clientId: string, content: string, image_url?: string | null, direction: 'inbound' | 'outbound' = 'outbound') => {
     const newMessage: Message = {
       id: uuidv4(),
       client_id: clientId,
       recipient_id: '',
       content,
       image_url: image_url || null,
-      direction: 'outbound',
+      direction: direction,
       timestamp: new Date().toISOString(),
       is_read: false
     };
@@ -793,7 +1063,11 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
     setClients(prevClients => {
       const client = prevClients.find(c => c.id === clientId);
       if (client) {
-        newMessage.recipient_id = client.email;
+        if (direction === 'outbound') {
+          newMessage.recipient_id = client.email;
+        } else {
+          newMessage.recipient_id = 'producer@ogbeatz.com';
+        }
         clientName = client.name;
       }
       return prevClients;
@@ -815,8 +1089,8 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
 
     addActivity({
       type: 'social',
-      user: 'OGBeatz',
-      action: `Sent message to ${clientName}`,
+      user: direction === 'inbound' ? clientName : 'OGBeatz',
+      action: direction === 'inbound' ? 'submitted feedback' : `Sent message to ${clientName}`,
       details: content,
       client_id: clientId
     });
@@ -867,7 +1141,19 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
   };
 
   const getShareContent = async (token: string) => {
-    if (!supabase) return null;
+    if (!supabase) {
+      // Offline fallback lookup using local state arrays
+      const link = shareLinks.find(l => l.token === token);
+      if (!link) return null;
+      let track: Track | undefined;
+      let playlist: Playlist | undefined;
+      if (link.track_id) {
+        track = tracks.find(t => t.id === link.track_id);
+      } else if (link.playlist_id) {
+        playlist = playlists.find(p => p.id === link.playlist_id);
+      }
+      return { track, playlist, link };
+    }
 
     try {
       const { data: linkData, error: linkError } = await supabase
@@ -995,6 +1281,30 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
 
   const analyzeTrack = async (name: string): Promise<{ bpm: number, key: string, duration?: number, tags?: string[] }> => {
     const cleanName = name.replace(/\.[^/.]+$/, ""); // Remove extension
+    const duration = 120 + (cleanName.length * 3) % 111;
+
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: name })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && typeof data.bpm === 'number' && typeof data.key === 'string' && Array.isArray(data.tags)) {
+          addToast("AI Analysis completed successfully via Gemini on the server!", 'success');
+          return {
+            bpm: data.bpm,
+            key: data.key,
+            duration,
+            tags: data.tags
+          };
+        }
+      }
+    } catch (e: any) {
+      console.warn("Could not reach server-side Gemini analyzer, performing offline heuristic fallback:", e.message);
+    }
+
     const cleanLower = cleanName.toLowerCase();
 
     // 1. BPM Heuristic
@@ -1037,9 +1347,6 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
         break;
       }
     }
-
-    // 3. Duration Heuristic (between 130s and 230s based on title length)
-    const duration = 120 + (cleanName.length * 3) % 111;
 
     // 4. Tags Heuristic
     const tags: string[] = [];
@@ -1108,7 +1415,7 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
 
   return (
     <MediaStoreContext.Provider value={{
-      tracks, playlists, clients, activities, profile, loading, shareLinks, messages, promoVideos,
+      tracks, playlists, clients, activities, profile, loading, loadingProgress, loadingStatusText, shareLinks, messages, promoVideos,
       addTrack, updateTrack, deleteTrack, addPlaylist, updatePlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist,
       addClient, updateClient, deleteClient, updateProfile, addShareLink, getShareContent, addActivity, analyzeTrack, sendMessage, addPromoVideo, deletePromoVideo, incrementShareLinkAccess,
       uploadFile,

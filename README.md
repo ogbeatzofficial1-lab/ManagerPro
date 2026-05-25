@@ -141,6 +141,8 @@ The CRM client registry handles importing CSV data securely:
 
 Follow these steps to initialize and run this exact system from a bare-metal terminal.
 
+For the **Complete Production compilation, environment configurations, and detailed step-by-step instructions for hosting the compiled system on InfinityFree with `.htaccess` URL rewrites**, please refer to our dedicated [**Deployment & InfinityFree Hosting Guide (DEPLOYMENT_GUIDE.md)**](./DEPLOYMENT_GUIDE.md).
+
 ### Step 1: System Initialization
 ```bash
 # Create and move into workspace directory

@@ -16,7 +16,7 @@ interface SharePortalProps {
 }
 
 export default function SharePortal({ track: initialTrack, playlist, shareLink }: SharePortalProps) {
-  const { tracks: allTracks, addActivity, sendMessage } = useMediaStore();
+  const { tracks: allTracks, addActivity, sendMessage, messages, updateTrack, addToast } = useMediaStore();
   const [activeTrack, setActiveTrack] = useState<Track | null>(initialTrack || null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -96,20 +96,38 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleRating = (type: 'up' | 'down') => {
+  const handleRating = async (type: 'up' | 'down') => {
     if (rating === type) {
       setRating(null);
       return;
     }
     setRating(type);
+    
     addActivity({
       type: type === 'up' ? 'social' as any : 'system' as any,
       user: 'Industry Client' + (shareLink.recipient_email ? ` (${shareLink.recipient_email})` : ''),
       action: type === 'up' ? 'thumbs_up' as any : 'thumbs_down' as any,
       target: activeTrack?.name || playlist?.name || 'Asset',
       details: type === 'up' ? 'High-priority approval.' : 'Requested revision cycle.',
-      client_id: shareLink.client_id
+      client_id: shareLink.client_id,
+      track_id: activeTrack?.id,
+      playlist_id: playlist?.id
     });
+
+    if (shareLink.client_id) {
+       const ratingMessage = type === 'up' 
+         ? `[Mix Approval]: Approved the mix for reference "${activeTrack?.name || 'Asset'}"!` 
+         : `[Revision Request]: Flagged "${activeTrack?.name || 'Asset'}" for revision adjustments.`;
+       await sendMessage(shareLink.client_id, ratingMessage, null, 'inbound');
+    }
+
+    if (type === 'up' && activeTrack) {
+       // Gracefully update likes/approval metrics
+       await updateTrack(activeTrack.id, { likes: (activeTrack.likes || 0) + 1 });
+       addToast("Mix approval synced to live dashboard!", 'success');
+    } else if (type === 'down' && activeTrack) {
+       addToast("Revision request logged. Our studio team has been notified.", 'success');
+    }
   };
 
   const handleComment = async (e: React.FormEvent) => {
@@ -117,7 +135,7 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
     if (!comment.trim()) return;
     
     const newComment = { id: Date.now().toString(), user: 'Industry Client', text: comment, time: 'Just now' };
-    setComments([newComment, ...comments]);
+    setComments(prev => [newComment, ...prev]);
     
     addActivity({
       type: 'comment' as any,
@@ -125,15 +143,67 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
       action: 'commented on',
       target: activeTrack?.name || playlist?.name || 'Asset',
       details: comment,
-      client_id: shareLink.client_id
+      client_id: shareLink.client_id,
+      track_id: activeTrack?.id,
+      playlist_id: playlist?.id
     });
 
     if (shareLink.client_id) {
-       await sendMessage(shareLink.client_id, `[Industry Feedback on ${activeTrack?.name || 'Asset'}]: ${comment}`);
+       await sendMessage(shareLink.client_id, `[Feedback on ${activeTrack?.name || 'Asset'}]: ${comment}`, null, 'inbound');
     }
 
     setComment('');
   };
+
+  // Synchronized historical comments from the database messages table
+  const dbComments = useMemo(() => {
+    if (!messages) return [];
+    
+    return messages
+      .filter(m => {
+        const matchClient = shareLink.client_id ? m.client_id === shareLink.client_id : true;
+        const matchTrackName = activeTrack ? m.content.includes(activeTrack.name) : true;
+        return m.direction === 'inbound' && matchClient && matchTrackName;
+      })
+      .map(m => {
+        let cleanText = m.content;
+        cleanText = cleanText.replace(/^\[Feedback on [^\]]+\]:\s*/i, "");
+        cleanText = cleanText.replace(/^\[Industry Feedback on [^\]]+\]:\s*/i, "");
+        cleanText = cleanText.replace(/^\[Mix Approval\]:\s*/i, "👍 ");
+        cleanText = cleanText.replace(/^\[Revision Request\]:\s*/i, "👎 ");
+
+        return {
+          id: m.id,
+          user: 'Industry Client',
+          text: cleanText,
+          time: new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      });
+  }, [messages, shareLink.client_id, activeTrack]);
+
+  const displayedComments = useMemo(() => {
+    const merged = [...comments];
+    dbComments.forEach(dc => {
+      if (!merged.some(mc => mc.id === dc.id)) {
+        merged.push(dc);
+      }
+    });
+    return merged;
+  }, [comments, dbComments]);
+
+  // Read rating status dynamically from the database feedback history
+  const currentTrackRating = useMemo(() => {
+     if (!messages || !activeTrack || !shareLink.client_id) return rating;
+     const lastRatingMsg = messages
+       .filter(m => m.client_id === shareLink.client_id && m.content.includes(activeTrack.name))
+       .filter(m => m.content.includes('[Mix Approval]') || m.content.includes('[Revision Request]'))
+       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+     
+     if (lastRatingMsg) {
+        return lastRatingMsg.content.includes('[Mix Approval]') ? 'up' : 'down';
+     }
+     return rating;
+  }, [messages, activeTrack, shareLink.client_id, rating]);
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-orange-500 selection:text-black overflow-x-hidden font-sans">
@@ -148,9 +218,9 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
                transition={{ duration: 1 }}
                className="absolute inset-0 grayscale blur-[120px] scale-150"
                style={{ 
-                 backgroundImage: `url(${activeTrack?.image_url})`,
-                 backgroundSize: 'cover',
-                 backgroundPosition: 'center'
+                  backgroundImage: `url(${activeTrack?.image_url})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center'
                }}
             />
          </AnimatePresence>
@@ -256,7 +326,7 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
                   <div className="absolute inset-0 bg-white/5 rounded-3xl backdrop-blur-sm border border-white/5" />
                   <div className="absolute inset-x-8 inset-y-6 flex items-center justify-between gap-1 overflow-hidden pointer-events-none">
                      {[...Array(60)].map((_, i) => {
-                        const progressPct = (progress / duration) * 100;
+                        const progressPct = (progress / (duration || 1)) * 100;
                         const barPct = (i / 60) * 100;
                         const active = barPct <= progressPct;
                         return (
@@ -285,7 +355,7 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
                      <div className="w-2 h-2 rounded-full bg-orange-500" />
                      <span>{formatTime(progress)}</span>
                   </div>
-                  <span>{formatTime(duration)}</span>
+                  <span>{formatTime(duration || activeTrack?.duration || 0)}</span>
                </div>
             </div>
           </div>
@@ -299,15 +369,40 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
                      <h3 className="text-xl font-black uppercase tracking-tight">Review Protocol</h3>
                      {shareLink.download_enabled && (
                         <button 
-                          onClick={() => {
+                          onClick={async () => {
                              if (activeTrack?.file_url) {
-                                const a = document.createElement('a');
-                                a.href = activeTrack.file_url;
-                                a.download = `${activeTrack.name}_MASTER.mp3`;
-                                a.click();
+                                try {
+                                  addToast("Initializing secure high-fidelity download stream...", "info");
+                                  const response = await fetch(activeTrack.file_url);
+                                  const blob = await response.blob();
+                                  const blobUrl = window.URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = blobUrl;
+                                  a.download = `${activeTrack.name}_MASTER_24BIT.wav`;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  document.body.removeChild(a);
+                                  window.URL.revokeObjectURL(blobUrl);
+                                  addToast("Master reference successfully downloaded!", "success");
+                                  
+                                  addActivity({
+                                    type: 'download',
+                                    user: 'Industry Client' + (shareLink.recipient_email ? ` (${shareLink.recipient_email})` : ''),
+                                    action: 'downloaded master',
+                                    target: activeTrack.name,
+                                    client_id: shareLink.client_id,
+                                    track_id: activeTrack.id
+                                  });
+                                } catch (err) {
+                                  console.warn("Direct blob download error, running fallback link redirect:", err);
+                                  const a = document.createElement('a');
+                                  a.href = activeTrack.file_url;
+                                  a.download = `${activeTrack.name}_MASTER.mp3`;
+                                  a.click();
+                                }
                              }
                           }}
-                          className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-orange-500 hover:text-white transition-colors"
+                          className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-orange-500 hover:text-white transition-colors animate-pulse"
                         >
                            <Download className="w-4 h-4" /> Download WAV
                         </button>
@@ -319,24 +414,24 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
                        onClick={() => handleRating('up')}
                        className={cn(
                          "flex flex-col items-center justify-center gap-5 p-10 rounded-[2.5rem] border transition-all duration-500",
-                         rating === 'up' 
+                         currentTrackRating === 'up' 
                          ? "bg-emerald-500 border-emerald-400 text-black shadow-[0_0_50px_rgba(16,185,129,0.2)]" 
                          : "bg-white/5 border-white/5 text-emerald-500/50 hover:border-emerald-500/30 hover:bg-emerald-500/5"
                        )}
                      >
-                        <ThumbsUp className={cn("w-10 h-10", rating === 'up' && "fill-current")} />
+                        <ThumbsUp className={cn("w-10 h-10", currentTrackRating === 'up' && "fill-current")} />
                         <span className="text-[9px] font-black uppercase tracking-widest">Approve Mix</span>
                      </button>
                      <button 
                        onClick={() => handleRating('down')}
                        className={cn(
                          "flex flex-col items-center justify-center gap-5 p-10 rounded-[2.5rem] border transition-all duration-500",
-                         rating === 'down' 
+                         currentTrackRating === 'down' 
                          ? "bg-red-500 border-red-400 text-black shadow-[0_0_50px_rgba(239,68,68,0.2)]" 
                          : "bg-white/5 border-white/5 text-red-500/50 hover:border-red-500/30 hover:bg-red-500/5"
                        )}
                      >
-                        <ThumbsDown className={cn("w-10 h-10", rating === 'down' && "fill-current")} />
+                        <ThumbsDown className={cn("w-10 h-10", currentTrackRating === 'down' && "fill-current")} />
                         <span className="text-[9px] font-black uppercase tracking-widest">Revisions</span>
                      </button>
                   </div>
@@ -348,56 +443,54 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
                   </div>
 
                   {playlist && (
-                    <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="grid grid-cols-1 gap-2 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
                        {playlistTracks.map((t, idx) => (
                          <button 
                            key={t.id}
                            onClick={() => setActiveTrack(t)}
                            className={cn(
-                             "w-full flex items-center justify-between p-5 rounded-[1.5rem] border transition-all group",
+                             "w-full flex items-center justify-between p-4 rounded-[1.2rem] border transition-all group text-left",
                              activeTrack?.id === t.id 
                              ? "bg-white border-white text-black font-black" 
                              : "bg-white/5 border-white/5 text-zinc-500 hover:border-white/10 hover:bg-white/10"
                            )}
                          >
-                           <div className="flex items-center gap-4 overflow-hidden">
-                              <span className={cn("text-[10px] font-mono", activeTrack?.id === t.id ? "text-zinc-600" : "text-zinc-800")}>{(idx + 1).toString().padStart(2, '0')}</span>
-                              <span className="text-[11px] uppercase tracking-tight truncate">{t.name}</span>
+                           <div className="flex items-center gap-4 overflow-hidden min-w-0">
+                              <span className={cn("text-[9px] font-mono shrink-0", activeTrack?.id === t.id ? "text-zinc-600" : "text-zinc-800")}>{(idx + 1).toString().padStart(2, '0')}</span>
+                              <span className="text-[10px] uppercase tracking-tight truncate">{t.name}</span>
                            </div>
-                           {activeTrack?.id === t.id ? <Play className="w-3.5 h-3.5 fill-current" /> : <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                           {activeTrack?.id === t.id ? <Play className="w-3.5 h-3.5 fill-current shrink-0" /> : <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
                          </button>
                        ))}
                     </div>
                   )}
 
-                  {!playlist && (
-                    <form onSubmit={handleComment} className="space-y-4">
-                       <div className="relative">
-                         <textarea 
-                            value={comment}
-                            onChange={(e) => setComment(e.target.value)}
-                            placeholder="Identify specific timestamps for mix adjustments..."
-                            className="w-full h-40 bg-white/5 border border-white/5 rounded-[2rem] p-8 text-xs focus:outline-none focus:border-orange-500 transition-all resize-none placeholder:text-zinc-700 leading-relaxed"
-                         />
-                         <button 
-                           type="submit"
-                           disabled={!comment.trim()}
-                           className="absolute bottom-5 right-5 w-12 h-12 bg-white text-black rounded-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:scale-100"
-                         >
-                            <Send className="w-5 h-5" />
-                         </button>
-                       </div>
-                    </form>
-                  )}
+                  <form onSubmit={handleComment} className="space-y-4">
+                     <div className="relative">
+                       <textarea 
+                          value={comment}
+                          onChange={(e) => setComment(e.target.value)}
+                          placeholder={`Submit timestamps or vocal revision notes for ${activeTrack?.name || 'active master'}...`}
+                          className="w-full h-36 bg-white/5 border border-white/5 rounded-[2rem] p-6 pr-16 text-xs focus:outline-none focus:border-orange-500 transition-all resize-none placeholder:text-zinc-700 leading-relaxed"
+                       />
+                       <button 
+                         type="submit"
+                         disabled={!comment.trim()}
+                         className="absolute bottom-5 right-5 w-10 h-10 bg-white text-black rounded-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:scale-100"
+                       >
+                          <Send className="w-4 h-4" />
+                       </button>
+                     </div>
+                  </form>
 
-                  <div className="space-y-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                     <AnimatePresence initial={false}>
-                      {comments.map(c => (
+                      {displayedComments.map(c => (
                         <motion.div 
                           key={c.id}
                           initial={{ opacity: 0, x: 20 }}
                           animate={{ opacity: 1, x: 0 }}
-                          className="bg-zinc-900 border border-white/5 p-6 rounded-[2rem] space-y-3"
+                          className="bg-zinc-900 border border-white/5 p-5 rounded-[2rem] space-y-3"
                         >
                           <div className="flex items-center justify-between">
                              <span className="text-[9px] font-black uppercase text-orange-500 tracking-widest">{c.user}</span>
@@ -406,6 +499,11 @@ export default function SharePortal({ track: initialTrack, playlist, shareLink }
                           <p className="text-xs text-zinc-300 leading-relaxed italic">"{c.text}"</p>
                         </motion.div>
                       ))}
+                      {displayedComments.length === 0 && (
+                        <div className="text-center py-10 bg-white/[0.01] border border-dashed border-white/5 rounded-[1.5rem]">
+                           <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider">No feedback threads logged for this reference.</p>
+                        </div>
+                      )}
                     </AnimatePresence>
                   </div>
                </div>
